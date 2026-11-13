@@ -23,6 +23,7 @@ data class MusicUiState(
     val playlists: List<Playlist> = emptyList(),
     val favorites: List<AudioTrack> = emptyList(),
     val searchQuery: String = "",
+    val selectedFolder: MediaFolder? = null,
     val sortField: SortField = SortField.NAME,
     val sortDirection: SortDirection = SortDirection.ASCENDING,
     val playbackState: PlaybackState = PlaybackState(),
@@ -65,7 +66,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setTab(tab: MusicTab) {
-        _uiState.update { it.copy(currentTab = tab) }
+        _uiState.update { it.copy(currentTab = tab, selectedFolder = null) }
     }
 
     fun setSearchQuery(query: String) {
@@ -77,6 +78,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             val sorted = mediaRepo.sortAudioTracks(current.tracks, field, direction)
             current.copy(sortField = field, sortDirection = direction, tracks = sorted)
         }
+    }
+
+    fun selectFolder(folder: MediaFolder) {
+        _uiState.update { current ->
+            current.copy(
+                selectedFolder = folder,
+                currentTab = MusicTab.ALL_SONGS,
+                searchQuery = folder.name
+            )
+        }
+    }
+
+    fun clearFolderFilter() {
+        _uiState.update { it.copy(selectedFolder = null, searchQuery = "") }
     }
 
     fun playTrack(track: AudioTrack) {
@@ -108,6 +123,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             if (name.isNotBlank()) {
                 playlistRepo.createPlaylist(name.trim())
             }
+        }
+    }
+
+    fun refreshLibrary() {
+        viewModelScope.launch {
+            mediaRepo.refreshAll()
         }
     }
 }

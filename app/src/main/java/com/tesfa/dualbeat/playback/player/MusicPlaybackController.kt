@@ -1,11 +1,13 @@
 package com.tesfa.dualbeat.playback.player
 
 import android.content.Context
-import android.media.AudioManager
-import android.net.Uri
+import androidx.core.content.ContextCompat
 import androidx.media3.common.*
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaController
+import com.google.common.util.concurrent.ListenableFuture
 import com.tesfa.dualbeat.domain.model.AudioTrack
+import com.tesfa.dualbeat.playback.service.DualBeatMediaSessionService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,38 +29,55 @@ data class PlaybackState(
     val queue: List<AudioTrack> = emptyList(),
     val queueIndex: Int = -1,
     val audioSessionId: Int = 0,
+    val isControllerConnected: Boolean = false,
     val errorMessage: String? = null
 )
 
+@UnstableApi
 class MusicPlaybackController(
     private val context: Context,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 ) {
 
-    private var exoPlayer: ExoPlayer? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var mediaController: MediaController? = null
 
     private val _playbackState = MutableStateFlow(PlaybackState())
     val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
 
     private var progressJob: Job? = null
 
+    // In-memory queue cache mapped to MediaItems
+    private val currentQueueTracks = mutableListOf<AudioTrack>()
+
     init {
-        initPlayer()
+        connectToMediaSession()
     }
 
-    private fun initPlayer() {
-        val player = ExoPlayer.Builder(context)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .setUsage(C.USAGE_MEDIA)
-                    .build(),
-                true // handle audio focus automatically
-            )
-            .setHandleAudioBecomingNoisy(true)
-            .build()
+    private fun connectToMediaSession() {
+        val sessionToken = DualBeatMediaSessionService.getSessionToken(context)
+        val future = MediaController.Builder(context, sessionToken).buildAsync()
+        controllerFuture = future
 
-        player.addListener(object : Player.Listener {
+        future.addListener(
+            {
+                try {
+                    val controller = future.get()
+                    mediaController = controller
+                    attachControllerListeners(controller)
+                    syncStateFromController(controller)
+                } catch (e: Exception) {
+                    _playbackState.value = _playbackState.value.copy(
+                        errorMessage = "Failed to connect to MediaSession: ${e.localizedMessage}"
+                    )
+                }
+            },
+            ContextCompat.getMainExecutor(context)
+        )
+    }
+
+    private fun attachControllerListeners(controller: MediaController) {
+        controller.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _playbackState.value = _playbackState.value.copy(isPlaying = isPlaying)
                 if (isPlaying) {
@@ -68,23 +87,52 @@ class MusicPlaybackController(
                 }
             }
 
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                when (playbackState) {
+            override fun onPlaybackStateChanged(state: Int) {
+                when (state) {
                     Player.STATE_READY -> {
                         _playbackState.value = _playbackState.value.copy(
-                            totalDurationMs = exoPlayer?.duration?.coerceAtLeast(0L) ?: 0L,
-                            audioSessionId = exoPlayer?.audioSessionId ?: 0,
+                            totalDurationMs = controller.duration.coerceAtLeast(0L),
+                            audioSessionId = DualBeatMediaSessionService.activeAudioSessionId,
                             errorMessage = null
                         )
                     }
                     Player.STATE_ENDED -> {
-                        handleTrackEnded()
+                        stopProgressTracker()
+                        _playbackState.value = _playbackState.value.copy(
+                            isPlaying = false,
+                            currentPositionMs = 0L
+                        )
                     }
                     Player.STATE_IDLE -> {
                         stopProgressTracker()
                     }
                     Player.STATE_BUFFERING -> {}
                 }
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val currentIdx = controller.currentMediaItemIndex
+                if (currentIdx in currentQueueTracks.indices) {
+                    val track = currentQueueTracks[currentIdx]
+                    _playbackState.value = _playbackState.value.copy(
+                        currentTrack = track,
+                        queueIndex = currentIdx,
+                        totalDurationMs = controller.duration.coerceAtLeast(0L)
+                    )
+                }
+            }
+
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                _playbackState.value = _playbackState.value.copy(isShuffleEnabled = shuffleModeEnabled)
+            }
+
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                val mode = when (repeatMode) {
+                    Player.REPEAT_MODE_ONE -> RepeatMode.ONE
+                    Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+                    else -> RepeatMode.OFF
+                }
+                _playbackState.value = _playbackState.value.copy(repeatMode = mode)
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -94,16 +142,43 @@ class MusicPlaybackController(
                 )
             }
         })
-
-        exoPlayer = player
-        _playbackState.value = _playbackState.value.copy(audioSessionId = player.audioSessionId)
     }
 
-    fun getPlayer(): ExoPlayer? = exoPlayer
+    private fun syncStateFromController(controller: MediaController) {
+        val currentIdx = controller.currentMediaItemIndex
+        val track = currentQueueTracks.getOrNull(currentIdx)
+        val repeatMode = when (controller.repeatMode) {
+            Player.REPEAT_MODE_ONE -> RepeatMode.ONE
+            Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+            else -> RepeatMode.OFF
+        }
+
+        _playbackState.value = _playbackState.value.copy(
+            isControllerConnected = true,
+            isPlaying = controller.isPlaying,
+            currentPositionMs = controller.currentPosition.coerceAtLeast(0L),
+            totalDurationMs = controller.duration.coerceAtLeast(0L),
+            isShuffleEnabled = controller.shuffleModeEnabled,
+            repeatMode = repeatMode,
+            currentTrack = track,
+            queue = currentQueueTracks.toList(),
+            queueIndex = currentIdx,
+            audioSessionId = DualBeatMediaSessionService.activeAudioSessionId
+        )
+
+        if (controller.isPlaying) {
+            startProgressTracker()
+        }
+    }
+
+    fun getController(): MediaController? = mediaController
 
     fun playQueue(tracks: List<AudioTrack>, startIndex: Int = 0, startPositionMs: Long = 0L) {
         if (tracks.isEmpty()) return
-        val player = exoPlayer ?: return
+        val controller = mediaController ?: return
+
+        currentQueueTracks.clear()
+        currentQueueTracks.addAll(tracks)
 
         val validIndex = startIndex.coerceIn(0, tracks.size - 1)
         val selectedTrack = tracks[validIndex]
@@ -130,9 +205,9 @@ class MusicPlaybackController(
                 .build()
         }
 
-        player.setMediaItems(mediaItems, validIndex, startPositionMs)
-        player.prepare()
-        player.play()
+        controller.setMediaItems(mediaItems, validIndex, startPositionMs)
+        controller.prepare()
+        controller.play()
     }
 
     fun playSingle(track: AudioTrack) {
@@ -140,127 +215,77 @@ class MusicPlaybackController(
     }
 
     fun resume() {
-        exoPlayer?.play()
+        mediaController?.play()
     }
 
     fun pause() {
-        exoPlayer?.pause()
+        mediaController?.pause()
     }
 
     fun togglePlayPause() {
-        val player = exoPlayer ?: return
-        if (player.isPlaying) {
-            pause()
+        val controller = mediaController ?: return
+        if (controller.isPlaying) {
+            controller.pause()
         } else {
-            resume()
+            controller.play()
         }
     }
 
     fun next() {
-        val player = exoPlayer ?: return
-        val state = _playbackState.value
-        if (state.queue.isEmpty()) return
-
-        if (state.isShuffleEnabled) {
-            val randomIndex = state.queue.indices.random()
-            playQueue(state.queue, randomIndex)
-            return
-        }
-
-        val nextIndex = state.queueIndex + 1
-        if (nextIndex < state.queue.size) {
-            player.seekToDefaultPosition(nextIndex)
-            _playbackState.value = state.copy(
-                queueIndex = nextIndex,
-                currentTrack = state.queue[nextIndex]
-            )
-            player.play()
-        } else if (state.repeatMode == RepeatMode.ALL) {
-            player.seekToDefaultPosition(0)
-            _playbackState.value = state.copy(
-                queueIndex = 0,
-                currentTrack = state.queue[0]
-            )
-            player.play()
+        val controller = mediaController ?: return
+        if (controller.hasNextMediaItem()) {
+            controller.seekToNextMediaItem()
+        } else if (_playbackState.value.repeatMode == RepeatMode.ALL && currentQueueTracks.isNotEmpty()) {
+            controller.seekToDefaultPosition(0)
         }
     }
 
     fun previous() {
-        val player = exoPlayer ?: return
-        val state = _playbackState.value
-        if (state.queue.isEmpty()) return
-
-        if (player.currentPosition > 3000) {
-            player.seekTo(0)
+        val controller = mediaController ?: return
+        if (controller.currentPosition > 3000) {
+            controller.seekTo(0)
             return
         }
-
-        val prevIndex = state.queueIndex - 1
-        if (prevIndex >= 0) {
-            player.seekToDefaultPosition(prevIndex)
-            _playbackState.value = state.copy(
-                queueIndex = prevIndex,
-                currentTrack = state.queue[prevIndex]
-            )
-            player.play()
+        if (controller.hasPreviousMediaItem()) {
+            controller.seekToPreviousMediaItem()
         } else {
-            player.seekTo(0)
+            controller.seekTo(0)
         }
     }
 
     fun seekTo(positionMs: Long) {
-        exoPlayer?.seekTo(positionMs)
+        mediaController?.seekTo(positionMs)
         _playbackState.value = _playbackState.value.copy(currentPositionMs = positionMs)
     }
 
     fun toggleShuffle() {
-        val nextShuffle = !_playbackState.value.isShuffleEnabled
+        val controller = mediaController ?: return
+        val nextShuffle = !controller.shuffleModeEnabled
+        controller.shuffleModeEnabled = nextShuffle
         _playbackState.value = _playbackState.value.copy(isShuffleEnabled = nextShuffle)
-        exoPlayer?.shuffleModeEnabled = nextShuffle
     }
 
     fun cycleRepeatMode() {
+        val controller = mediaController ?: return
         val current = _playbackState.value.repeatMode
-        val next = when (current) {
-            RepeatMode.OFF -> RepeatMode.ALL
-            RepeatMode.ALL -> RepeatMode.ONE
-            RepeatMode.ONE -> RepeatMode.OFF
+        val (nextMode, playerMode) = when (current) {
+            RepeatMode.OFF -> Pair(RepeatMode.ALL, Player.REPEAT_MODE_ALL)
+            RepeatMode.ALL -> Pair(RepeatMode.ONE, Player.REPEAT_MODE_ONE)
+            RepeatMode.ONE -> Pair(RepeatMode.OFF, Player.REPEAT_MODE_OFF)
         }
-        _playbackState.value = _playbackState.value.copy(repeatMode = next)
-        exoPlayer?.repeatMode = when (next) {
-            RepeatMode.OFF -> Player.REPEAT_MODE_OFF
-            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-        }
-    }
-
-    private fun handleTrackEnded() {
-        val state = _playbackState.value
-        when (state.repeatMode) {
-            RepeatMode.ONE -> {
-                exoPlayer?.seekTo(0)
-                exoPlayer?.play()
-            }
-            RepeatMode.ALL, RepeatMode.OFF -> {
-                if (state.queueIndex + 1 < state.queue.size || state.repeatMode == RepeatMode.ALL) {
-                    next()
-                } else {
-                    stopProgressTracker()
-                    _playbackState.value = state.copy(isPlaying = false, currentPositionMs = 0L)
-                }
-            }
-        }
+        controller.repeatMode = playerMode
+        _playbackState.value = _playbackState.value.copy(repeatMode = nextMode)
     }
 
     private fun startProgressTracker() {
         progressJob?.cancel()
         progressJob = scope.launch {
             while (isActive) {
-                exoPlayer?.let { player ->
-                    if (player.isPlaying) {
+                mediaController?.let { controller ->
+                    if (controller.isPlaying) {
                         _playbackState.value = _playbackState.value.copy(
-                            currentPositionMs = player.currentPosition.coerceAtLeast(0L),
-                            totalDurationMs = player.duration.coerceAtLeast(0L)
+                            currentPositionMs = controller.currentPosition.coerceAtLeast(0L),
+                            totalDurationMs = controller.duration.coerceAtLeast(0L)
                         )
                     }
                 }
@@ -276,7 +301,7 @@ class MusicPlaybackController(
 
     fun release() {
         stopProgressTracker()
-        exoPlayer?.release()
-        exoPlayer = null
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        mediaController = null
     }
 }

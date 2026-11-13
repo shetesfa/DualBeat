@@ -1,6 +1,7 @@
 package com.tesfa.dualbeat
 
 import android.app.Application
+import androidx.media3.common.util.UnstableApi
 import com.tesfa.dualbeat.audio.effects.SoundStudioEngine
 import com.tesfa.dualbeat.bluetooth.BluetoothDeviceManager
 import com.tesfa.dualbeat.bluetooth.MultiBluetoothEngine
@@ -10,9 +11,17 @@ import com.tesfa.dualbeat.data.repository.MediaRepository
 import com.tesfa.dualbeat.data.repository.PlaylistRepository
 import com.tesfa.dualbeat.playback.player.MusicPlaybackController
 import com.tesfa.dualbeat.playback.player.VideoPlaybackController
+import com.tesfa.dualbeat.playback.service.DualBeatMediaSessionService
 import com.tesfa.dualbeat.receiver.DualBeatCastClient
 import com.tesfa.dualbeat.receiver.DualBeatCastServer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
+@UnstableApi
 class DualBeatApp : Application() {
 
     // Database & Local Repositories
@@ -47,6 +56,8 @@ class DualBeatApp : Application() {
     lateinit var castClient: DualBeatCastClient
         private set
 
+    private val appScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -64,9 +75,16 @@ class DualBeatApp : Application() {
         videoController = VideoPlaybackController(this)
         soundStudioEngine = SoundStudioEngine()
 
-        // Bind audio session ID of music player to SoundStudioEngine
-        musicController.getPlayer()?.let { player ->
-            soundStudioEngine.attachSession(player.audioSessionId)
+        // Bind SoundStudioEngine dynamically to the single active audio session ID
+        appScope.launch {
+            musicController.playbackState
+                .map { it.audioSessionId }
+                .distinctUntilChanged()
+                .collect { sessionId ->
+                    if (sessionId != 0) {
+                        soundStudioEngine.attachSession(sessionId)
+                    }
+                }
         }
 
         bluetoothDeviceManager = BluetoothDeviceManager(this)

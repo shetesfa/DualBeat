@@ -1,14 +1,18 @@
 package com.tesfa.dualbeat.ui.video
 
 import android.app.Activity
+import android.content.Context
 import android.content.pm.ActivityInfo
+import android.media.AudioManager
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -39,15 +43,22 @@ fun VideoPlayerScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
+    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+
     val state by viewModel.uiState.collectAsState()
     val videoState = state.playbackState
+
+    // Live gesture HUD states
+    var gestureHudType by remember { mutableStateOf<String?>(null) } // "brightness", "volume", "seek"
+    var gestureHudValue by remember { mutableStateOf(0) } // percentage 0..100
+    var gestureSeekPreviewMs by remember { mutableStateOf(0L) }
 
     LaunchedEffect(videoId) {
         viewModel.playVideo(videoId)
     }
 
     DisposableEffect(Unit) {
-        val activity = context as? Activity
         val originalOrientation = activity?.requestedOrientation
         onDispose {
             viewModel.saveCurrentPosition()
@@ -65,21 +76,93 @@ fun VideoPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(videoState.isLocked) {
-                detectTapGestures(
-                    onTap = {
-                        viewModel.videoController.toggleControlsVisibility()
-                    },
-                    onDoubleTap = { offset ->
-                        if (!videoState.isLocked) {
+                if (videoState.isLocked) {
+                    detectTapGestures { viewModel.videoController.toggleControlsVisibility() }
+                } else {
+                    detectTapGestures(
+                        onTap = { viewModel.videoController.toggleControlsVisibility() },
+                        onDoubleTap = { offset ->
                             val screenWidth = size.width
                             if (offset.x < screenWidth / 2) {
-                                viewModel.videoController.seekRelative(-10000L) // Rewind 10s
+                                viewModel.videoController.seekRelative(-10000L)
                             } else {
-                                viewModel.videoController.seekRelative(10000L) // Fast-forward 10s
+                                viewModel.videoController.seekRelative(10000L)
                             }
                         }
-                    }
-                )
+                    )
+                }
+            }
+            .pointerInput(videoState.isLocked) {
+                if (!videoState.isLocked) {
+                    var totalDragY = 0f
+                    var totalDragX = 0f
+                    var isDragHorizontal = false
+                    var startDragPos = 0L
+
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            totalDragY = 0f
+                            totalDragX = 0f
+                            isDragHorizontal = false
+                            startDragPos = videoState.currentPositionMs
+                        },
+                        onDragEnd = {
+                            if (isDragHorizontal) {
+                                viewModel.videoController.seekTo(gestureSeekPreviewMs)
+                            }
+                            gestureHudType = null
+                        },
+                        onDragCancel = {
+                            gestureHudType = null
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            totalDragX += dragAmount.x
+                            totalDragY += dragAmount.y
+
+                            val screenWidth = size.width
+                            val screenHeight = size.height
+
+                            // Horizontal Seek Scrubbing
+                            if (kotlin.math.abs(totalDragX) > kotlin.math.abs(totalDragY) * 1.5f || isDragHorizontal) {
+                                isDragHorizontal = true
+                                val duration = videoState.totalDurationMs.coerceAtLeast(1L)
+                                val scrubOffsetMs = (totalDragX / screenWidth * 60000L).toLong() // 60s per full screen width
+                                val targetPos = (startDragPos + scrubOffsetMs).coerceIn(0L, duration)
+                                gestureSeekPreviewMs = targetPos
+                                gestureHudType = "seek"
+                            } else {
+                                // Vertical Gestures: Left half = Brightness, Right half = Volume
+                                val isLeftHalf = change.position.x < screenWidth / 2
+                                if (isLeftHalf) {
+                                    // Window Brightness Control
+                                    activity?.window?.let { window ->
+                                        val attrs = window.attributes
+                                        val currentBrightness = if (attrs.screenBrightness < 0) 0.5f else attrs.screenBrightness
+                                        val delta = -dragAmount.y / (screenHeight * 0.75f)
+                                        val newBrightness = (currentBrightness + delta).coerceIn(0.01f, 1.0f)
+                                        attrs.screenBrightness = newBrightness
+                                        window.attributes = attrs
+                                        gestureHudType = "brightness"
+                                        gestureHudValue = (newBrightness * 100).toInt()
+                                    }
+                                } else {
+                                    // System Audio Volume Control
+                                    val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                    val curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                                    val delta = -dragAmount.y / (screenHeight / (maxVol * 2f))
+                                    if (kotlin.math.abs(delta) >= 1f) {
+                                        val newVol = (curVol + delta.toInt()).coerceIn(0, maxVol)
+                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                                        gestureHudType = "volume"
+                                        gestureHudValue = (newVol.toFloat() / maxVol * 100).toInt()
+                                        totalDragY = 0f
+                                    }
+                                }
+                            }
+                        }
+                    )
+                }
             }
     ) {
         // Video View
@@ -113,6 +196,40 @@ fun VideoPlayerScreen(
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // Live Gesture Feedback HUD (Brightness / Volume / Scrubbing)
+        if (gestureHudType != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(16.dp)),
+                color = Color.Black.copy(alpha = 0.75f),
+                tonalElevation = 8.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    when (gestureHudType) {
+                        "brightness" -> {
+                            Icon(imageVector = Icons.Rounded.BrightnessMedium, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("Brightness $gestureHudValue%", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        "volume" -> {
+                            Icon(imageVector = Icons.Rounded.VolumeUp, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("Volume $gestureHudValue%", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        "seek" -> {
+                            Icon(imageVector = Icons.Rounded.FastForward, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("${FormatUtils.formatDuration(gestureSeekPreviewMs)} / ${FormatUtils.formatDuration(videoState.totalDurationMs)}", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
 
         // Overlay Controls
         AnimatedVisibility(

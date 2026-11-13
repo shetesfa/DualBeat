@@ -1,5 +1,7 @@
 package com.tesfa.dualbeat.ui.home
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,18 +12,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tesfa.dualbeat.core.util.FormatUtils
+import com.tesfa.dualbeat.core.util.PermissionManager
 import com.tesfa.dualbeat.domain.model.AudioTrack
 import com.tesfa.dualbeat.domain.model.VideoItem
+import com.tesfa.dualbeat.ui.components.ContextualPermissionCard
 import com.tesfa.dualbeat.ui.components.SongListItem
 import com.tesfa.dualbeat.ui.components.VideoGridCard
 
@@ -32,7 +34,21 @@ fun HomeScreen(
     onNavigateToSpeakers: () -> Unit,
     onNavigateToSound: () -> Unit
 ) {
+    val context = LocalContext.current
     val state by viewModel.uiState.collectAsState()
+    var hasMediaPermission by remember {
+        mutableStateOf(PermissionManager.hasMediaPermissions(context))
+    }
+
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result.values.any { it }
+        hasMediaPermission = PermissionManager.hasMediaPermissions(context)
+        if (granted) {
+            viewModel.refreshAll()
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -113,6 +129,23 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
+        }
+
+        // Contextual Media Permission Request (if not yet granted)
+        if (!hasMediaPermission) {
+            item {
+                ContextualPermissionCard(
+                    icon = Icons.Rounded.AudioFile,
+                    title = "Media Access Required",
+                    description = "DualBeat needs storage permission to find and play your local music, albums, and videos. Your media stays safely on your device.",
+                    onRequestPermission = {
+                        mediaPermissionLauncher.launch(PermissionManager.getRequiredMediaPermissions())
+                    },
+                    onOpenSettings = {
+                        PermissionManager.openAppSettings(context)
+                    }
+                )
             }
         }
 
@@ -223,7 +256,7 @@ fun HomeScreen(
                     track = track,
                     isPlaying = false,
                     onClick = { viewModel.playTrack(track) },
-                    onFavoriteClick = {}
+                    onFavoriteClick = { viewModel.toggleFavorite(track) }
                 )
             }
         }

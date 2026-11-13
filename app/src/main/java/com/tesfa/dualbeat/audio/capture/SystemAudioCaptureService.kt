@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import com.tesfa.dualbeat.DualBeatApp
 import com.tesfa.dualbeat.R
 import com.tesfa.dualbeat.receiver.protocol.DualBeatCastProtocol
 import kotlinx.coroutines.*
@@ -111,15 +112,14 @@ class SystemAudioCaptureService : Service() {
                 while (isActive && isCapturing) {
                     val readBytes = record.read(buffer, 0, buffer.size)
                     if (readBytes > 0) {
-                        // Forward captured PCM buffer to DualBeatCastServer for multi-speaker streaming
+                        // Forward captured PCM buffer directly into DualBeatCastServer for Wi-Fi streaming
+                        DualBeatApp.instance.castServer.broadcastAudioPcm(buffer, 0, readBytes)
                     }
                 }
             }
         } catch (e: SecurityException) {
-            e.printStackTrace()
             stopCapture()
         } catch (e: Exception) {
-            e.printStackTrace()
             stopCapture()
         }
     }
@@ -132,7 +132,7 @@ class SystemAudioCaptureService : Service() {
             audioRecord?.stop()
             audioRecord?.release()
         } catch (e: Exception) {
-            e.printStackTrace()
+            // Ignored
         }
         audioRecord = null
         mediaProjection?.stop()

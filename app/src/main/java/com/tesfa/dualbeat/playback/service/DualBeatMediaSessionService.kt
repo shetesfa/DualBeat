@@ -3,33 +3,58 @@ package com.tesfa.dualbeat.playback.service
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import androidx.core.app.NotificationCompat
-import androidx.media3.common.Player
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionToken
 import com.tesfa.dualbeat.MainActivity
-import com.tesfa.dualbeat.R
 
 @UnstableApi
 class DualBeatMediaSessionService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
+    private var player: ExoPlayer? = null
 
     companion object {
         const val CHANNEL_ID = "dualbeat_playback_channel"
         const val NOTIFICATION_ID = 1001
+
+        @Volatile
+        var activeAudioSessionId: Int = 0
+            private set
+
+        fun getSessionToken(context: Context): SessionToken {
+            return SessionToken(
+                context,
+                ComponentName(context, DualBeatMediaSessionService::class.java)
+            )
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
 
-        val player = ExoPlayer.Builder(this).build()
+        val exo = ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                true // handle audio focus automatically
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+
+        player = exo
+        activeAudioSessionId = exo.audioSessionId
 
         val activityIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -41,7 +66,7 @@ class DualBeatMediaSessionService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        mediaSession = MediaSession.Builder(this, player)
+        mediaSession = MediaSession.Builder(this, exo)
             .setSessionActivity(pendingIntent)
             .build()
     }
@@ -50,12 +75,20 @@ class DualBeatMediaSessionService : MediaSessionService() {
         return mediaSession
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val p = player
+        if (p == null || !p.playWhenReady || p.mediaItemCount == 0) {
+            stopSelf()
+        }
+    }
+
     override fun onDestroy() {
         mediaSession?.run {
             player.release()
             release()
             mediaSession = null
         }
+        player = null
         super.onDestroy()
     }
 

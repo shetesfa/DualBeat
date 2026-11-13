@@ -1,5 +1,7 @@
 package com.tesfa.dualbeat.ui.music
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,7 +11,9 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.tesfa.dualbeat.core.util.PermissionManager
 import com.tesfa.dualbeat.domain.model.SortDirection
 import com.tesfa.dualbeat.domain.model.SortField
 import com.tesfa.dualbeat.ui.components.*
@@ -19,8 +23,23 @@ fun MusicScreen(
     viewModel: MusicViewModel,
     onNavigateToEqualizer: () -> Unit
 ) {
+    val context = LocalContext.current
     val state by viewModel.uiState.collectAsState()
     var showSortMenu by remember { mutableStateOf(false) }
+
+    var hasMediaPermission by remember {
+        mutableStateOf(PermissionManager.hasMediaPermissions(context))
+    }
+
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result.values.any { it }
+        hasMediaPermission = PermissionManager.hasMediaPermissions(context)
+        if (granted) {
+            viewModel.refreshLibrary()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -119,85 +138,103 @@ fun MusicScreen(
         }
 
         // Content Area depending on Tab
-        when (state.currentTab) {
-            MusicTab.ALL_SONGS -> {
-                if (state.tracks.isEmpty()) {
-                    EmptyState(
-                        icon = Icons.Rounded.MusicOff,
-                        title = "No Music Files Found",
-                        subtitle = "Audio tracks stored in device memory will appear here automatically."
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 90.dp)
-                    ) {
-                        items(state.tracks) { track ->
-                            val isPlaying = state.playbackState.currentTrack?.id == track.id
-                            SongListItem(
-                                track = track,
-                                isPlaying = isPlaying,
-                                onClick = { viewModel.playTrack(track) },
-                                onFavoriteClick = { viewModel.toggleFavorite(track) }
-                            )
+        if (!hasMediaPermission) {
+            ContextualPermissionCard(
+                icon = Icons.Rounded.AudioFile,
+                title = "Music Storage Permission Needed",
+                description = "DualBeat requires access to your audio library to scan and organize your music files. Your music never leaves your device.",
+                onRequestPermission = {
+                    mediaPermissionLauncher.launch(PermissionManager.getRequiredMediaPermissions())
+                },
+                onOpenSettings = {
+                    PermissionManager.openAppSettings(context)
+                }
+            )
+        } else {
+            when (state.currentTab) {
+                MusicTab.ALL_SONGS -> {
+                    if (state.tracks.isEmpty()) {
+                        EmptyState(
+                            icon = Icons.Rounded.MusicOff,
+                            title = "No Music Files Found",
+                            subtitle = "Audio tracks stored in device memory will appear here automatically.",
+                            actionButtonText = "Scan Library",
+                            onActionClick = { viewModel.refreshLibrary() }
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 90.dp)
+                        ) {
+                            items(state.tracks) { track ->
+                                val isPlaying = state.playbackState.currentTrack?.id == track.id
+                                SongListItem(
+                                    track = track,
+                                    isPlaying = isPlaying,
+                                    onClick = { viewModel.playTrack(track) },
+                                    onFavoriteClick = { viewModel.toggleFavorite(track) }
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            MusicTab.FOLDERS -> {
-                if (state.folders.isEmpty()) {
-                    EmptyState(
-                        icon = Icons.Rounded.FolderOff,
-                        title = "No Folders Detected",
-                        subtitle = "Directories containing media files will appear here."
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 90.dp)
-                    ) {
-                        items(state.folders) { folder ->
-                            FolderListItem(
-                                folder = folder,
-                                onClick = {}
-                            )
+                MusicTab.FOLDERS -> {
+                    if (state.folders.isEmpty()) {
+                        EmptyState(
+                            icon = Icons.Rounded.FolderOff,
+                            title = "No Folders Detected",
+                            subtitle = "Directories containing media files will appear here.",
+                            actionButtonText = "Scan Folders",
+                            onActionClick = { viewModel.refreshLibrary() }
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 90.dp)
+                        ) {
+                            items(state.folders) { folder ->
+                                FolderListItem(
+                                    folder = folder,
+                                    onClick = { viewModel.selectFolder(folder) }
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            MusicTab.PLAYLISTS -> {
-                EmptyState(
-                    icon = Icons.Rounded.PlaylistPlay,
-                    title = "Playlists",
-                    subtitle = "Create custom playlists to group your favorite songs and audio tracks.",
-                    actionButtonText = "Create New Playlist",
-                    onActionClick = { viewModel.createPlaylist("Favorites Mix") }
-                )
-            }
-
-            MusicTab.FAVORITES -> {
-                val favTracks = state.tracks.filter { it.isFavorite }
-                if (favTracks.isEmpty()) {
+                MusicTab.PLAYLISTS -> {
                     EmptyState(
-                        icon = Icons.Rounded.FavoriteBorder,
-                        title = "No Favorites Yet",
-                        subtitle = "Tap the heart icon on any track to add it to your quick favorites."
+                        icon = Icons.Rounded.PlaylistPlay,
+                        title = "Playlists",
+                        subtitle = "Create custom playlists to group your favorite songs and audio tracks.",
+                        actionButtonText = "Create New Playlist",
+                        onActionClick = { viewModel.createPlaylist("Favorites Mix") }
                     )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 90.dp)
-                    ) {
-                        items(favTracks) { track ->
-                            val isPlaying = state.playbackState.currentTrack?.id == track.id
-                            SongListItem(
-                                track = track,
-                                isPlaying = isPlaying,
-                                onClick = { viewModel.playTrack(track) },
-                                onFavoriteClick = { viewModel.toggleFavorite(track) }
-                            )
+                }
+
+                MusicTab.FAVORITES -> {
+                    val favTracks = state.tracks.filter { it.isFavorite }
+                    if (favTracks.isEmpty()) {
+                        EmptyState(
+                            icon = Icons.Rounded.FavoriteBorder,
+                            title = "No Favorites Yet",
+                            subtitle = "Tap the heart icon on any track to add it to your quick favorites."
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 90.dp)
+                        ) {
+                            items(favTracks) { track ->
+                                val isPlaying = state.playbackState.currentTrack?.id == track.id
+                                SongListItem(
+                                    track = track,
+                                    isPlaying = isPlaying,
+                                    onClick = { viewModel.playTrack(track) },
+                                    onFavoriteClick = { viewModel.toggleFavorite(track) }
+                                )
+                            }
                         }
                     }
                 }

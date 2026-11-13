@@ -3,6 +3,7 @@ package com.tesfa.dualbeat.data.repository
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import com.tesfa.dualbeat.data.local.dao.FavoriteDao
 import com.tesfa.dualbeat.data.local.dao.PlaybackHistoryDao
@@ -49,25 +50,33 @@ class MediaRepository(
 
     private fun scanAudioInternal(): List<AudioTrack> {
         val tracks = mutableListOf<AudioTrack>()
-        val projection = arrayOf(
+        val projection = mutableListOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.SIZE,
-            MediaStore.Audio.Media.DATA,
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.Audio.Media.DATE_MODIFIED,
             MediaStore.Audio.Media.ALBUM_ID
         )
+
+        // Include Scoped Storage columns if API 29+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            projection.add(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+            projection.add(MediaStore.MediaColumns.RELATIVE_PATH)
+        } else {
+            @Suppress("DEPRECATION")
+            projection.add(MediaStore.Audio.Media.DATA)
+        }
 
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
 
         context.contentResolver.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            projection,
+            projection.toTypedArray(),
             selection,
             null,
             sortOrder
@@ -78,10 +87,20 @@ class MediaRepository(
             val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
-            val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
             val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
             val dateModCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
             val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+
+            val bucketNameCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                cursor.getColumnIndex(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+            } else -1
+            val relativePathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+            } else -1
+            @Suppress("DEPRECATION")
+            val dataCol = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                cursor.getColumnIndex(MediaStore.Audio.Media.DATA)
+            } else -1
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
@@ -90,15 +109,25 @@ class MediaRepository(
                 val album = cursor.getString(albumCol) ?: "Unknown Album"
                 val duration = cursor.getLong(durationCol)
                 val size = cursor.getLong(sizeCol)
-                val dataPath = cursor.getString(dataCol) ?: ""
                 val dateAdded = cursor.getLong(dateAddedCol) * 1000L
                 val dateMod = cursor.getLong(dateModCol) * 1000L
                 val albumId = cursor.getLong(albumIdCol)
 
                 val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-                val folderPath = if (dataPath.isNotEmpty()) {
-                    File(dataPath).parent ?: ""
-                } else ""
+
+                // Safe Scoped Storage folder resolution
+                val folderPath = when {
+                    relativePathCol != -1 && !cursor.isNull(relativePathCol) -> {
+                        cursor.getString(relativePathCol).trimEnd('/')
+                    }
+                    bucketNameCol != -1 && !cursor.isNull(bucketNameCol) -> {
+                        cursor.getString(bucketNameCol)
+                    }
+                    dataCol != -1 && !cursor.isNull(dataCol) -> {
+                        File(cursor.getString(dataCol)).parent ?: "Music"
+                    }
+                    else -> "Music"
+                }
 
                 val albumArtUri = ContentUris.withAppendedId(
                     Uri.parse("content://media/external/audio/albumart"),
@@ -114,7 +143,7 @@ class MediaRepository(
                         durationMs = duration,
                         sizeBytes = size,
                         contentUri = contentUri,
-                        dataPath = dataPath,
+                        dataPath = folderPath, // scoped logical path
                         folderPath = folderPath,
                         dateAdded = dateAdded,
                         dateModified = dateMod,
@@ -129,23 +158,30 @@ class MediaRepository(
 
     private fun scanVideoInternal(): List<VideoItem> {
         val videos = mutableListOf<VideoItem>()
-        val projection = arrayOf(
+        val projection = mutableListOf(
             MediaStore.Video.Media._ID,
             MediaStore.Video.Media.TITLE,
             MediaStore.Video.Media.DURATION,
             MediaStore.Video.Media.SIZE,
-            MediaStore.Video.Media.DATA,
             MediaStore.Video.Media.DATE_ADDED,
             MediaStore.Video.Media.DATE_MODIFIED,
             MediaStore.Video.Media.WIDTH,
             MediaStore.Video.Media.HEIGHT
         )
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            projection.add(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+            projection.add(MediaStore.MediaColumns.RELATIVE_PATH)
+        } else {
+            @Suppress("DEPRECATION")
+            projection.add(MediaStore.Video.Media.DATA)
+        }
+
         val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
 
         context.contentResolver.query(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-            projection,
+            projection.toTypedArray(),
             null,
             null,
             sortOrder
@@ -154,27 +190,46 @@ class MediaRepository(
             val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.TITLE)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
             val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
-            val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
             val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
             val dateModCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_MODIFIED)
             val widthCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.WIDTH)
             val heightCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.HEIGHT)
+
+            val bucketNameCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                cursor.getColumnIndex(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME)
+            } else -1
+            val relativePathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+            } else -1
+            @Suppress("DEPRECATION")
+            val dataCol = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                cursor.getColumnIndex(MediaStore.Video.Media.DATA)
+            } else -1
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 val title = cursor.getString(titleCol) ?: "Untitled Video"
                 val duration = cursor.getLong(durationCol)
                 val size = cursor.getLong(sizeCol)
-                val dataPath = cursor.getString(dataCol) ?: ""
                 val dateAdded = cursor.getLong(dateAddedCol) * 1000L
                 val dateMod = cursor.getLong(dateModCol) * 1000L
                 val width = cursor.getInt(widthCol)
                 val height = cursor.getInt(heightCol)
 
                 val contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
-                val folderPath = if (dataPath.isNotEmpty()) {
-                    File(dataPath).parent ?: ""
-                } else ""
+
+                val folderPath = when {
+                    relativePathCol != -1 && !cursor.isNull(relativePathCol) -> {
+                        cursor.getString(relativePathCol).trimEnd('/')
+                    }
+                    bucketNameCol != -1 && !cursor.isNull(bucketNameCol) -> {
+                        cursor.getString(bucketNameCol)
+                    }
+                    dataCol != -1 && !cursor.isNull(dataCol) -> {
+                        File(cursor.getString(dataCol)).parent ?: "Videos"
+                    }
+                    else -> "Videos"
+                }
 
                 videos.add(
                     VideoItem(
@@ -183,7 +238,7 @@ class MediaRepository(
                         durationMs = duration,
                         sizeBytes = size,
                         contentUri = contentUri,
-                        dataPath = dataPath,
+                        dataPath = folderPath,
                         folderPath = folderPath,
                         dateAdded = dateAdded,
                         dateModified = dateMod,
@@ -197,7 +252,7 @@ class MediaRepository(
     }
 
     private fun computeFolders(audioList: List<AudioTrack>, videoList: List<VideoItem>): List<MediaFolder> {
-        val folderMap = mutableMapOf<String, MutableList<Pair<Long, Long>>>() // path -> list of (size, lastModified)
+        val folderMap = mutableMapOf<String, MutableList<Pair<Long, Long>>>()
         val audioCounts = mutableMapOf<String, Int>()
         val videoCounts = mutableMapOf<String, Int>()
 
@@ -218,14 +273,13 @@ class MediaRepository(
         }
 
         return folderMap.map { (path, items) ->
-            val folderFile = File(path)
-            val folderName = folderFile.name.ifEmpty { path }
+            val folderName = if (path.contains('/')) path.substringAfterLast('/') else path
             val totalSize = items.sumOf { it.first }
             val latestMod = items.maxOfOrNull { it.second } ?: 0L
 
             MediaFolder(
                 path = path,
-                name = folderName,
+                name = folderName.ifEmpty { "Media" },
                 audioCount = audioCounts[path] ?: 0,
                 videoCount = videoCounts[path] ?: 0,
                 totalSizeBytes = totalSize,

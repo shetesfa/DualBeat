@@ -1,5 +1,7 @@
 package com.tesfa.dualbeat.ui.components
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -12,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,9 +25,10 @@ import com.tesfa.dualbeat.domain.model.ReceiverState
 @Composable
 fun BluetoothDeviceCard(
     device: BluetoothAudioDevice,
-    onConnectClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -71,10 +75,10 @@ fun BluetoothDeviceCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     val statusText = when {
-                        device.isAudioActive -> "Active Audio Route"
-                        device.isConnected -> "Connected"
-                        device.isBonded -> "Paired"
-                        else -> "Available"
+                        device.isAudioActive -> "Active Audio Output"
+                        device.isConnected -> "Connected (Standby)"
+                        device.isBonded -> "Paired in Android"
+                        else -> "Discovered"
                     }
                     Text(
                         text = statusText,
@@ -91,18 +95,20 @@ fun BluetoothDeviceCard(
                 }
             }
 
-            if (device.isAudioActive) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Text(
-                        text = "ACTIVE",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+            // Supported Action: Open system Bluetooth settings for pairing/routing
+            OutlinedButton(
+                onClick = {
+                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = if (device.isAudioActive) "Manage" else "Settings",
+                    fontSize = 12.sp
+                )
             }
         }
     }

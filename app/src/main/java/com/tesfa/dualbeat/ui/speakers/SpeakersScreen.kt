@@ -1,5 +1,9 @@
 package com.tesfa.dualbeat.ui.speakers
 
+import android.content.Intent
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,24 +12,39 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tesfa.dualbeat.core.util.PermissionManager
+import com.tesfa.dualbeat.domain.model.DualAudioDetectionStatus
 import com.tesfa.dualbeat.ui.components.BluetoothDeviceCard
+import com.tesfa.dualbeat.ui.components.ContextualPermissionCard
 import com.tesfa.dualbeat.ui.components.WiFilReceiverCard
 
 @Composable
 fun SpeakersScreen(
     viewModel: SpeakersViewModel
 ) {
+    val context = LocalContext.current
     val state by viewModel.uiState.collectAsState()
     val report = state.routeReport
+
+    var hasBluetoothPermission by remember {
+        mutableStateOf(PermissionManager.hasBluetoothPermissions(context))
+    }
+
+    val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        hasBluetoothPermission = PermissionManager.hasBluetoothPermissions(context)
+        if (hasBluetoothPermission) {
+            viewModel.refreshAll()
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -49,7 +68,7 @@ fun SpeakersScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Current Audio Route",
+                                text = "Current Audio Output",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -74,32 +93,51 @@ fun SpeakersScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Multi-Output / Samsung Dual Audio Status Tag
+                    // Multi-Output / Samsung Dual Audio Status Tag (Honest, System-Managed Status)
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = if (report.isSamsungDualAudioActive) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                        color = when (report.dualAudioStatus) {
+                            DualAudioDetectionStatus.SYSTEM_MANAGED -> MaterialTheme.colorScheme.primaryContainer
+                            DualAudioDetectionStatus.SINGLE_OUTPUT_ACTIVE -> MaterialTheme.colorScheme.surface
+                            else -> MaterialTheme.colorScheme.surfaceDim
+                        }
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = if (report.isSamsungDualAudioActive) Icons.Rounded.CheckCircle else Icons.Rounded.Info,
+                                imageVector = Icons.Rounded.Info,
                                 contentDescription = null,
-                                tint = if (report.isSamsungDualAudioActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (report.isSamsungDualAudioActive) "Samsung Dual Audio ACTIVE"
-                                else "Standard Audio Route Active",
+                                text = "Routing: ${report.dualAudioStatus.displayText}",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (report.isSamsungDualAudioActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
                 }
+            }
+        }
+
+        // Contextual Bluetooth Permission Card (if not yet granted on Android 12+)
+        if (!hasBluetoothPermission) {
+            item {
+                ContextualPermissionCard(
+                    icon = Icons.Rounded.Bluetooth,
+                    title = "Bluetooth Permission Needed",
+                    description = "DualBeat requires Bluetooth Nearby Devices permission to detect your connected wireless headphones and speakers.",
+                    onRequestPermission = {
+                        bluetoothPermissionLauncher.launch(PermissionManager.getRequiredBluetoothPermissions())
+                    },
+                    onOpenSettings = {
+                        PermissionManager.openAppSettings(context)
+                    }
+                )
             }
         }
 
@@ -122,7 +160,7 @@ fun SpeakersScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Multi-Bluetooth Audio Analysis",
+                            text = "Multi-Bluetooth Audio Architecture",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -133,6 +171,24 @@ fun SpeakersScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Bluetooth, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open Android Bluetooth Settings")
+                    }
                 }
             }
         }
@@ -158,17 +214,14 @@ fun SpeakersScreen(
         if (state.bondedDevices.isEmpty()) {
             item {
                 Text(
-                    text = "No paired Bluetooth audio devices found. Pair your speakers in Android Settings → Bluetooth.",
+                    text = "No paired Bluetooth audio devices found. Tap above to pair speakers in Android Settings.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         } else {
             items(state.bondedDevices) { device ->
-                BluetoothDeviceCard(
-                    device = device,
-                    onConnectClick = {}
-                )
+                BluetoothDeviceCard(device = device)
             }
         }
 
@@ -193,7 +246,7 @@ fun SpeakersScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Stream synchronized audio to any phone or receiver device",
+                                text = "Stream audio across phones or receiver devices over local LAN",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -208,62 +261,107 @@ fun SpeakersScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Run This Device as Speaker Receiver",
+                                text = "Listen as Audio Receiver",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = if (state.isReceiverModeActive) "Listening for incoming audio streams" else "Device acts as transmitter",
+                                text = "Turn this phone into a remote wireless speaker for other devices",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
-                            checked = state.isReceiverModeActive,
-                            onCheckedChange = { viewModel.toggleReceiverMode(it) }
+                            checked = state.isReceiverRunning,
+                            onCheckedChange = { viewModel.toggleReceiver() }
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    if (state.isReceiverRunning) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Receiver listening on TCP port 4242. Stream audio to this device from another DualBeat transmitter.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
 
-                    // Scan Network for Receivers Button
-                    Button(
-                        onClick = {
-                            if (state.isScanning) viewModel.stopCastDiscovery()
-                            else viewModel.startCastDiscovery()
-                        },
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Transmitter Mode Toggle
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = if (state.isScanning) Icons.Rounded.Stop else Icons.Rounded.Search,
-                            contentDescription = null
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Broadcast System Audio",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Stream audio to discovered Wi-Fi receivers over local network",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = state.isTransmitterRunning,
+                            onCheckedChange = { viewModel.toggleTransmitter() }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (state.isScanning) "Stop Network Scan" else "Scan Network for Receivers")
+                    }
+
+                    if (state.isTransmitterRunning) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "DualBeat Cast Server is running on port 4242. Discovered receivers will appear below.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
         }
 
         // Discovered Wi-Fi Receivers List
-        if (state.discoveredReceivers.isNotEmpty()) {
+        if (state.isTransmitterRunning) {
             item {
-                Text(
-                    text = "Discovered Wi-Fi Receivers",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Discovered Wi-Fi Receivers (${state.discoveredReceivers.size})",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    IconButton(onClick = { viewModel.scanReceivers() }) {
+                        Icon(imageVector = Icons.Rounded.Refresh, contentDescription = "Scan")
+                    }
+                }
             }
-            items(state.discoveredReceivers) { receiver ->
-                WiFilReceiverCard(
-                    node = receiver,
-                    onConnectToggle = { viewModel.toggleReceiverSync(receiver) }
-                )
+
+            if (state.discoveredReceivers.isEmpty()) {
+                item {
+                    Text(
+                        text = "Searching for DualBeat Cast receivers on Wi-Fi subnet…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                items(state.discoveredReceivers) { receiver ->
+                    WiFilReceiverCard(
+                        receiver = receiver,
+                        onConnectClick = { viewModel.toggleReceiverConnection(receiver) }
+                    )
+                }
             }
         }
     }

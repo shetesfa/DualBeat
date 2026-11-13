@@ -71,4 +71,10 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
     }
+
+    fun refreshVideos() {
+        viewModelScope.launch {
+            mediaRepo.refreshAll()
+        }
+    }
 }

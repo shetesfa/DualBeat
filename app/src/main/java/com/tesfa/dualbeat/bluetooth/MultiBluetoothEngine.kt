@@ -6,6 +6,7 @@ import android.media.AudioManager
 import android.os.Build
 import com.tesfa.dualbeat.domain.model.AudioRouteReport
 import com.tesfa.dualbeat.domain.model.AudioSinkType
+import com.tesfa.dualbeat.domain.model.DualAudioDetectionStatus
 
 class MultiBluetoothEngine(
     private val context: Context,
@@ -16,16 +17,19 @@ class MultiBluetoothEngine(
 
     fun analyzeRoutingCapabilities(): AudioRouteReport {
         val outputs = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-        val activeBtOutputs = outputs.filter { it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP }
-
         val (currentOutput, activeName) = deviceManager.getActiveAudioOutput()
         val bondedDevices = deviceManager.bondedDevices.value
         val connectedBtDevices = bondedDevices.filter { it.isConnected }
 
-        // Evaluation of Samsung Dual Audio / Android Multi-A2DP
-        val isSystemDualAudioActive = activeBtOutputs.size >= 2
-        val isSamsungDevice = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
-        val model = Build.MODEL
+        val isSamsung = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+
+        val dualAudioStatus = when {
+            !isSamsung -> DualAudioDetectionStatus.UNSUPPORTED_PLATFORM
+            connectedBtDevices.isEmpty() -> DualAudioDetectionStatus.NOT_CONNECTED
+            connectedBtDevices.size == 1 -> DualAudioDetectionStatus.SINGLE_OUTPUT_ACTIVE
+            connectedBtDevices.size >= 2 -> DualAudioDetectionStatus.SYSTEM_MANAGED
+            else -> DualAudioDetectionStatus.UNKNOWN
+        }
 
         val availableSinks = mutableListOf<AudioSinkType>()
         if (outputs.any { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }) availableSinks.add(AudioSinkType.INTERNAL_SPEAKER)
@@ -35,18 +39,17 @@ class MultiBluetoothEngine(
         availableSinks.add(AudioSinkType.WIFI_CAST_RECEIVER)
 
         val limitationNotice = buildString {
-            append("Device: $model (Manufacturer: ${Build.MANUFACTURER})\n")
-            if (isSamsungDevice) {
-                append("Samsung One UI Platform Detected. ")
-                if (isSystemDualAudioActive) {
-                    append("Samsung Dual Audio is currently ACTIVE in system audio routing. Both speakers receive synchronized audio.")
-                } else if (connectedBtDevices.size >= 2) {
-                    append("Multiple Bluetooth speakers connected. To activate simultaneous playback, open Samsung One UI Quick Panel → Media Output → check both Bluetooth devices. Third-party apps cannot override system Bluetooth HAL permissions without platform signature.")
+            append("Hardware: ${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE})\n")
+            if (isSamsung) {
+                if (connectedBtDevices.size >= 2) {
+                    append("2 or more Bluetooth speakers connected. Samsung Dual Audio is controlled exclusively by One UI system policy. To route media to both speakers: Swipe down Quick Panel → Tap 'Media Output' → Check both speakers. Public Android SDK APIs cannot force dual A2DP replication or confirm hardware clock synchronization.")
+                } else if (connectedBtDevices.size == 1) {
+                    append("1 Bluetooth audio device connected. Connect a second Bluetooth speaker to configure Dual Audio via Samsung Quick Panel.")
                 } else {
-                    append("Connect at least two Bluetooth audio devices to evaluate Dual Audio routing.")
+                    append("No Bluetooth speakers connected. Pair devices in Android Bluetooth settings.")
                 }
             } else {
-                append("Standard Android OS enforces a single active A2DP audio route for 3rd-party apps. Use DualBeat Wi-Fi Multi-Speaker Cast for multi-speaker synchronization.")
+                append("Standard Android OS enforces a single active A2DP audio route for third-party apps. DualBeat Wi-Fi Cast provides multi-device synchronized streaming.")
             }
         }
 
@@ -55,8 +58,8 @@ class MultiBluetoothEngine(
             activeOutputName = activeName,
             connectedBluetoothSinks = connectedBtDevices,
             availableOutputs = availableSinks,
-            isSamsungDualAudioActive = isSystemDualAudioActive,
-            isMultiOutputSupportedByFirmware = isSamsungDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P,
+            dualAudioStatus = dualAudioStatus,
+            isPhysicalMultiOutputVerified = false, // Not physically verified with dual hardware probes
             hardwareLimitationNotice = limitationNotice
         )
     }

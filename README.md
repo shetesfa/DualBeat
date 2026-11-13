@@ -1,6 +1,7 @@
 # DUALBEAT — Advanced Android Media Player & Multi-Output Audio Platform
 
 **Developer / Founder:** Tesfa  
+**Repository:** [https://github.com/shetesfa/DualBeat](https://github.com/shetesfa/DualBeat)  
 **Category:** Native Android Media Player, Equalizer & Multi-Output Audio Distribution  
 **Primary Target Device:** Samsung Galaxy A24 (SM-A245F)  
 **Target Operating System:** Android 16 / One UI 8.5 (minSdk 26, targetSdk 35)  
@@ -20,14 +21,15 @@ DualBeat is a native Android media player engineered from the ground up for high
 ## ⚡ Key Highlights
 
 ### 1. Unified Local Media Library
-- Automatic indexing of on-device music (`audio/*`) and videos (`video/*`) via scoped Android `MediaStore`.
+- Automatic indexing of on-device music (`audio/*`) and videos (`video/*`) via scoped Android `MediaStore` (`RELATIVE_PATH` + `ContentUris`).
 - Intuitive Folder Browser with directory hierarchy, file size calculation, and track counts.
 - Multi-criteria real-time sorting (by Title, Date Added, Date Modified, Duration, File Size, Artist, Album).
 - Fast local search with instant substring matching across metadata and file paths.
 - Local Favorites and Playlists backed by Android Room database.
 
-### 2. High-Fidelity Music Player
-- Powered by **AndroidX Media3** with a dedicated background `MediaSessionService`.
+### 2. High-Fidelity Music Player (Single Media3 Architecture)
+- Exclusively powered by a unified **AndroidX Media3** architecture where `DualBeatMediaSessionService` owns the single `ExoPlayer` instance.
+- Connected via asynchronous `MediaController`, ensuring seamless UI recreation during rotation and navigation.
 - Persistent **Mini-Player** with tap-to-expand modal bottom sheet.
 - System lock-screen and notification controls with media art and playback progress.
 - Headset unplugged protection (`AUDIO_BECOMING_NOISY`), audio focus ducking, and resume on interruption.
@@ -36,9 +38,9 @@ DualBeat is a native Android media player engineered from the ground up for high
 ### 3. Gesture-Driven Video Player
 - Seamless video rendering using Jetpack Compose and AndroidX Media3 `PlayerView`.
 - Configurable touch gestures:
-  - Vertical swipe on left side: Screen brightness.
-  - Vertical swipe on right side: Volume.
-  - Horizontal swipe: Video timeline scrubbing.
+  - Vertical swipe on left side: Screen brightness applied to window attributes.
+  - Vertical swipe on right side: Stream volume applied to `AudioManager`.
+  - Horizontal swipe: Video timeline scrubbing with live offset calculation.
   - Double-tap left/right: 10-second instant seek.
   - Single tap: Toggle UI controls.
 - Aspect ratio switcher (Fit, Fill, Zoom, 16:9, 4:3) and Speed control (0.5x to 2.0x).
@@ -52,8 +54,8 @@ DualBeat is a native Android media player engineered from the ground up for high
 
 ### 5. Speaker Control Center & Multi-Output Engine
 - **Bluetooth Device Management:** Enumerate bonded and connected Bluetooth speakers and identify the active system audio sink.
-- **Samsung One UI Dual Audio Analysis:** Deep inspection of Samsung Galaxy A24 firmware capabilities, distinguishing standard Android single A2DP routing from Samsung One UI Quick Panel Dual Audio.
-- **Wi-Fi Multi-Speaker (DualBeat Cast):** Cross-device synchronized audio distribution over local Wi-Fi. Stream to other phones or receiver devices with timestamped packets and jitter buffers.
+- **Truth in Bluetooth Engineering:** Honestly identifies Samsung Galaxy A24 multi-output state as `SYSTEM_MANAGED` and links directly to `Settings.ACTION_BLUETOOTH_SETTINGS`. Zero fake "ACTIVE" claims.
+- **Wi-Fi Multi-Speaker (DualBeat Cast):** Cross-device synchronized audio distribution over local Wi-Fi with non-blocking jitter buffer and sequence validation. Stream to other phones or receiver devices with timestamped packets.
 
 ### 6. Adaptive Split View & Multitasking
 - Dual-pane layout designed for phones, foldable devices, and tablets in portrait and landscape orientations.
@@ -65,15 +67,45 @@ DualBeat is a native Android media player engineered from the ground up for high
 
 ---
 
+## 🛠️ Building & Testing
+
+### Prerequisites
+- JDK 17 or JDK 21 (bundled in Android Studio)
+- Android SDK (API Level 35+)
+
+### Build Commands
+```bash
+# Clone the repository
+git clone https://github.com/shetesfa/DualBeat.git
+cd DualBeat
+
+# Build debug APK
+./gradlew assembleDebug
+
+# Build release APK (requires signing credentials configured)
+./gradlew assembleRelease
+
+# Run unit tests
+./gradlew test
+```
+
+### Direct Kotlin Test Suite Execution
+DualBeat includes a standalone test runner that compiles and executes all 8 unit test suites (30 tests) directly via the Kotlin compiler:
+```powershell
+powershell -ExecutionPolicy Bypass -File ./run_all_tests.ps1
+```
+
+---
+
 ## 📂 Project Architecture
 
 ```
 app/src/main/java/com/tesfa/dualbeat/
 ├── DualBeatApp.kt                  # Application class, dependency container
-├── MainActivity.kt                 # Launcher activity, permission orchestration
+├── MainActivity.kt                 # Launcher activity, contextual permission handling
 ├── core/
 │   ├── theme/                      # Color palettes, Typography, AMOLED & Light Themes
-│   └── util/                       # FormatUtils (duration, file size, timestamps)
+│   └── util/                       # FormatUtils, PermissionManager
 ├── data/
 │   ├── local/                      # Room Database, Entities (Playlists, Favorites, History), DAOs
 │   ├── preferences/                # Jetpack DataStore Preferences Repository
@@ -81,8 +113,8 @@ app/src/main/java/com/tesfa/dualbeat/
 ├── domain/
 │   └── model/                      # AudioTrack, VideoItem, MediaFolder, ReceiverNode, AudioEffects
 ├── playback/
-│   ├── player/                     # MusicPlaybackController, VideoPlaybackController
-│   └── service/                    # DualBeatMediaSessionService (Media3 Foreground Service)
+│   ├── player/                     # MusicPlaybackController (MediaController client)
+│   └── service/                    # DualBeatMediaSessionService (Media3 Foreground Service & ExoPlayer owner)
 ├── audio/
 │   ├── effects/                    # SoundStudioEngine (Equalizer, BassBoost, Virtualizer)
 │   └── capture/                    # SystemAudioCaptureService (MediaProjection / AudioPlaybackCapture)
@@ -96,7 +128,7 @@ app/src/main/java/com/tesfa/dualbeat/
 │   └── service/                    # DualBeatCastService (Foreground Wi-Fi streaming service)
 └── ui/
     ├── navigation/                 # Screen definitions & DualBeatNavGraph
-    ├── components/                 # MiniPlayer, MediaCards, DeviceCard, EqualizerSliders
+    ├── components/                 # MiniPlayer, MediaCards, DeviceCard, EqualizerSliders, PermissionCards
     ├── home/                       # HomeScreen & HomeViewModel
     ├── music/                      # MusicScreen, MusicViewModel, FullMusicPlayerBottomSheet
     ├── video/                      # VideoScreen, VideoPlayerScreen, VideoViewModel

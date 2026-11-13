@@ -12,12 +12,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.io.InputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
-import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
+import java.util.concurrent.ConcurrentLinkedQueue
+
+data class JitterBufferPacket(
+    val seq: Long,
+    val pts: Long,
+    val data: ByteArray
+)
 
 class DualBeatCastClient(
     private val context: Context,
@@ -33,10 +39,19 @@ class DualBeatCastClient(
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
+    private val _bufferFillPercent = MutableStateFlow(0)
+    val bufferFillPercent: StateFlow<Int> = _bufferFillPercent.asStateFlow()
+
     private var beaconJob: Job? = null
     private var streamJob: Job? = null
+    private var playbackJob: Job? = null
     private var serverSocket: ServerSocket? = null
     private var audioTrack: AudioTrack? = null
+
+    // Non-blocking Jitter Ring Buffer
+    private val jitterBuffer = ConcurrentLinkedQueue<JitterBufferPacket>()
+    private val TARGET_BUFFER_PACKETS = 4 // ~100ms target jitter depth
+    private var lastSequenceNumber: Long = -1L
 
     fun startReceiverMode() {
         if (_isListening.value) return
@@ -71,7 +86,7 @@ class DualBeatCastClient(
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                // Log and continue on interrupt
             } finally {
                 datagramSocket?.close()
             }
@@ -83,6 +98,7 @@ class DualBeatCastClient(
             try {
                 serverSocket = ServerSocket(DualBeatCastProtocol.STREAM_PORT)
                 initAudioTrack()
+                startJitterBufferPlayback()
 
                 while (isActive) {
                     val socket = serverSocket?.accept() ?: break
@@ -91,7 +107,7 @@ class DualBeatCastClient(
                     _isConnected.value = false
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                // Server closed or network error
             } finally {
                 releaseAudioTrack()
             }
@@ -126,6 +142,35 @@ class DualBeatCastClient(
         audioTrack = track
     }
 
+    private fun startJitterBufferPlayback() {
+        playbackJob = scope.launch {
+            var isPrebuffered = false
+            while (isActive) {
+                val packetCount = jitterBuffer.size
+                _bufferFillPercent.value = (packetCount.toFloat() / TARGET_BUFFER_PACKETS * 100).toInt().coerceIn(0, 100)
+
+                if (!isPrebuffered) {
+                    // Wait until initial jitter buffer depth is reached
+                    if (packetCount >= TARGET_BUFFER_PACKETS) {
+                        isPrebuffered = true
+                    } else {
+                        delay(10)
+                        continue
+                    }
+                }
+
+                val frame = jitterBuffer.poll()
+                if (frame != null) {
+                    audioTrack?.write(frame.data, 0, frame.data.size)
+                } else {
+                    // Buffer underrun: trigger re-buffering
+                    isPrebuffered = false
+                    delay(10)
+                }
+            }
+        }
+    }
+
     private fun handleStreamingConnection(socket: Socket) {
         val input = socket.getInputStream()
         val headerBuffer = ByteArray(28) // 4 magic + 4 type + 8 seq + 8 pts + 4 size
@@ -140,25 +185,35 @@ class DualBeatCastClient(
                 val pts = buf.getLong()
                 val payloadSize = buf.getInt()
 
-                if (magic != DualBeatCastProtocol.MAGIC_HEADER || payloadSize <= 0 || payloadSize > 65536) {
+                // Robust packet validation
+                if (magic != DualBeatCastProtocol.MAGIC_HEADER) {
                     break
                 }
+                if (payloadSize <= 0 || payloadSize > 65536) {
+                    break
+                }
+
+                // Sequence validation (detect lost or out of order packets)
+                if (lastSequenceNumber != -1L && seq <= lastSequenceNumber) {
+                    // Stale or duplicate packet, skip payload
+                    skipBytes(input, payloadSize)
+                    continue
+                }
+                lastSequenceNumber = seq
 
                 val payload = ByteArray(payloadSize)
                 readFully(input, payload, payloadSize)
 
                 if (type == DualBeatCastProtocol.TYPE_AUDIO_DATA) {
-                    // Jitter sync delay calculation
-                    val now = System.currentTimeMillis()
-                    val delayMs = pts - now
-                    if (delayMs in 1..200) {
-                        Thread.sleep(delayMs.coerceAtLeast(1L))
+                    jitterBuffer.offer(JitterBufferPacket(seq, pts, payload))
+                    // Cap buffer to prevent runaway memory usage
+                    if (jitterBuffer.size > TARGET_BUFFER_PACKETS * 4) {
+                        jitterBuffer.poll()
                     }
-                    audioTrack?.write(payload, 0, payloadSize)
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            // Disconnection handled gracefully
         } finally {
             runCatching { socket.close() }
         }
@@ -168,8 +223,17 @@ class DualBeatCastClient(
         var totalRead = 0
         while (totalRead < length) {
             val read = inputStream.read(buffer, totalRead, length - totalRead)
-            if (read == -1) throw Exception("Stream closed prematurely")
+            if (read == -1) throw Exception("Socket connection closed by transmitter")
             totalRead += read
+        }
+    }
+
+    private fun skipBytes(inputStream: InputStream, length: Int) {
+        var remaining = length.toLong()
+        while (remaining > 0) {
+            val skipped = inputStream.skip(remaining)
+            if (skipped <= 0) break
+            remaining -= skipped
         }
     }
 
@@ -179,6 +243,8 @@ class DualBeatCastClient(
             audioTrack?.release()
         }
         audioTrack = null
+        jitterBuffer.clear()
+        lastSequenceNumber = -1L
     }
 
     fun stopReceiverMode() {
@@ -186,6 +252,7 @@ class DualBeatCastClient(
         _isConnected.value = false
         beaconJob?.cancel()
         streamJob?.cancel()
+        playbackJob?.cancel()
         runCatching { serverSocket?.close() }
         releaseAudioTrack()
     }

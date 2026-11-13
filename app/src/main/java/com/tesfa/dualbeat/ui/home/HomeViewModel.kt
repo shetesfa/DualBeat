@@ -65,4 +65,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val idx = tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
         app.musicController.playQueue(tracks, idx)
     }
+
+    fun toggleFavorite(track: AudioTrack) {
+        viewModelScope.launch {
+            mediaRepo.toggleFavorite(track.id, MediaType.AUDIO, track.isFavorite)
+        }
+    }
 }
