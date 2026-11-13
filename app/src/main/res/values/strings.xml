@@ -1,0 +1,74 @@
+<resources>
+    <string name="app_name">DualBeat</string>
+    <string name="app_tagline">One Library. Powerful Playback. Smarter Sound.</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_videos">Videos</string>
+    <string name="nav_music">Music</string>
+    <string name="nav_speakers">Speakers</string>
+    <string name="nav_sound">Sound</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Developer Profile -->
+    <string name="developer_name">Tesfa</string>
+    <string name="developer_role">Founder &amp; Developer</string>
+    <string name="developer_about_title">Developer Profile</string>
+    <string name="about_dualbeat">About DualBeat</string>
+    <string name="app_version">1.0.0 (Build 1)</string>
+    <string name="copyright_notice">© 2026 DualBeat. All rights reserved.</string>
+    <string name="privacy_policy_title">Privacy &amp; Security</string>
+    <string name="privacy_policy_summary">DualBeat is a 100% on-device private media player. No user data, files, or audio streams are ever collected, tracked, or transmitted outside your local device network.</string>
+    <string name="open_source_licenses">Open-Source Licenses</string>
+    <string name="permissions_explanation">Permissions &amp; Capabilities</string>
+    <string name="feedback_title">Developer Feedback</string>
+
+    <!-- Media Library -->
+    <string name="search_placeholder">Search songs, videos, artists, folders…</string>
+    <string name="empty_music_title">No Music Found</string>
+    <string name="empty_music_subtitle">Grant storage permissions or add audio files to your device storage.</string>
+    <string name="empty_videos_title">No Videos Found</string>
+    <string name="empty_videos_subtitle">Grant storage permissions or record/download videos.</string>
+    <string name="grant_permission">Grant Permissions</string>
+    <string name="browse_storage">Browse Storage</string>
+    <string name="all_songs">All Songs</string>
+    <string name="all_videos">All Videos</string>
+    <string name="folders">Folders</string>
+    <string name="playlists">Playlists</string>
+    <string name="favorites">Favorites</string>
+    <string name="recently_played">Recently Played</string>
+    <string name="recently_added">Recently Added</string>
+
+    <!-- Player Controls -->
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="repeat">Repeat</string>
+    <string name="speed">Playback Speed</string>
+    <string name="aspect_ratio">Aspect Ratio</string>
+
+    <!-- Bluetooth & Speakers -->
+    <string name="speaker_control_center">Speaker Control Center</string>
+    <string name="multi_bluetooth_title">Multi-Bluetooth Engine</string>
+    <string name="wifi_receiver_title">Wi-Fi Multi-Speaker (Cast)</string>
+    <string name="scan_devices">Scan Devices</string>
+    <string name="refresh_status">Refresh Status</string>
+    <string name="connected_devices">Connected Audio Sinks</string>
+    <string name="available_devices">Discovered Devices</string>
+
+    <!-- Sound Studio -->
+    <string name="sound_studio">Sound Studio</string>
+    <string name="equalizer">Equalizer</string>
+    <string name="bass_boost">Bass Boost</string>
+    <string name="virtualizer">3D Virtualizer</string>
+    <string name="preset_normal">Normal</string>
+    <string name="preset_rock">Rock</string>
+    <string name="preset_pop">Pop</string>
+    <string name="preset_classical">Classical</string>
+    <string name="preset_jazz">Jazz</string>
+    <string name="preset_electronic">Electronic</string>
+    <string name="preset_vocal">Vocal</string>
+    <string name="preset_bass_boost">Bass Boost</string>
+</resources>

@@ -1,0 +1,84 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="300dp"
+    android:height="400dp"
+    android:viewportWidth="300"
+    android:viewportHeight="400">
+
+    <!-- 3:4 Aspect Ratio Background (Premium Dark Gradient) -->
+    <path
+        android:pathData="M0,0h300v400h-300z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="150"
+                android:startY="0"
+                android:endX="150"
+                android:endY="400"
+                android:type="linear">
+                <item android:color="#161B22" android:offset="0.0" />
+                <item android:color="#0D1117" android:offset="0.6" />
+                <item android:color="#05070A" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle Tech Grid Lines in Background -->
+    <path
+        android:pathData="M0,100 L300,100 M0,200 L300,200 M0,300 L300,300"
+        android:strokeWidth="0.5"
+        android:strokeColor="#21262D" />
+    <path
+        android:pathData="M75,0 L75,400 M150,0 L150,400 M225,0 L225,400"
+        android:strokeWidth="0.5"
+        android:strokeColor="#21262D" />
+
+    <!-- Center Avatar Placeholder Silhouette Ring -->
+    <path
+        android:pathData="M150,150m-64,0a64,64 0 1,1 128,0a64,64 0 1,1 -128,0"
+        android:strokeWidth="2">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="86"
+                android:startY="86"
+                android:endX="214"
+                android:endY="214"
+                android:type="linear">
+                <item android:color="#00E5FF" android:offset="0.0" />
+                <item android:color="#7C4DFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Geometric Avatar Head Silhouette -->
+    <path
+        android:pathData="M150,135m-30,0a30,30 0 1,1 60,0a30,30 0 1,1 -60,0"
+        android:fillColor="#30363D" />
+
+    <!-- Geometric Avatar Shoulder Silhouette -->
+    <path
+        android:pathData="M95,214 C95,185 120,175 150,175 C180,175 205,185 205,214 Z"
+        android:fillColor="#30363D" />
+
+    <!-- Developer Monogram "T" Badge Over Avatar -->
+    <path
+        android:pathData="M150,135m-18,0a18,18 0 1,1 36,0a18,18 0 1,1 -36,0"
+        android:fillColor="#0D1117" />
+    <path
+        android:pathData="M138,124 L162,124 C163,124 164,125 164,126 L164,129 C164,130 163,131 162,131 L152.5,131 L152.5,145 C152.5,146 151.5,147 150.5,147 L149.5,147 C148.5,147 147.5,146 147.5,145 L147.5,131 L138,131 C137,131 136,130 136,129 L136,126 C136,125 137,124 138,124 Z"
+        android:fillColor="#00E5FF" />
+
+    <!-- Developer Identification Card Lower Banner -->
+    <path
+        android:pathData="M30,270 L270,270 C274,270 278,274 278,278 L278,360 C278,364 274,368 270,368 L30,368 C26,368 22,364 22,360 L22,278 C22,274 26,270 30,270 Z"
+        android:fillColor="#161B22"
+        android:strokeWidth="1"
+        android:strokeColor="#30363D" />
+
+    <!-- Audio Wave lines at bottom of card -->
+    <path
+        android:pathData="M50,335 L60,335 M70,328 L80,328 M90,322 L100,322 M110,318 L120,318 M130,324 L140,324 M150,316 L160,316 M170,324 L180,324 M190,318 L200,318 M210,322 L220,322 M230,328 L240,328 M250,335 L260,335"
+        android:strokeWidth="2.5"
+        android:strokeColor="#00E5FF"
+        android:strokeAlpha="0.8" />
+
+</vector>

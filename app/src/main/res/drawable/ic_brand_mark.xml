@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Compact In-App Brand Mark -->
+    <path
+        android:pathData="M12,12 L36,12 C37.5,12 39,13.5 39,15 L39,19 C39,20.5 37.5,22 36,22 L27,22 L27,37 C27,38.5 25.5,40 24,40 L24,40 C22.5,40 21,38.5 21,37 L21,22 L12,22 C10.5,22 9,20.5 9,19 L9,15 C9,13.5 10.5,12 12,12 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="9"
+                android:startY="26"
+                android:endX="39"
+                android:endY="26"
+                android:type="linear">
+                <item android:color="#00E5FF" android:offset="0.0" />
+                <item android:color="#7C4DFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Left beat -->
+    <path
+        android:pathData="M5,20 C5,18 7,18 7,20 L7,28 C7,30 5,30 5,28 Z"
+        android:fillColor="#00E5FF" />
+    <!-- Right beat -->
+    <path
+        android:pathData="M41,20 C41,18 43,18 43,20 L43,28 C43,30 41,30 41,28 Z"
+        android:fillColor="#7C4DFF" />
+</vector>

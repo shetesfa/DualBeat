@@ -1,0 +1,100 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+
+    <!-- Premium Dark Background Circle with Glow -->
+    <path
+        android:pathData="M64,64m-60,0a60,60 0,1 1,120 0a60,60 0,1 1,-120 0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="64"
+                android:centerY="20"
+                android:gradientRadius="72"
+                android:type="radial">
+                <item android:color="#1A2639" android:offset="0.0" />
+                <item android:color="#070A10" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Outer Circular Accent Rim -->
+    <path
+        android:pathData="M64,8A56,56 0 1,1 63.9,8"
+        android:strokeWidth="1.5"
+        android:strokeAlpha="0.4">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="20"
+                android:startY="20"
+                android:endX="108"
+                android:endY="108"
+                android:type="linear">
+                <item android:color="#00E5FF" android:offset="0.0" />
+                <item android:color="#7C4DFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Left Sound Wave (DualBeat Output 1) -->
+    <path
+        android:pathData="M24,54 C24,48 28,44 32,48 C36,52 36,76 32,80 C28,84 24,80 24,74 Z"
+        android:fillColor="#00E5FF"
+        android:fillAlpha="0.85" />
+    <path
+        android:pathData="M16,59 C16,56 18,54 20,56 C22,58 22,70 20,72 C18,74 16,72 16,69 Z"
+        android:fillColor="#00E5FF"
+        android:fillAlpha="0.5" />
+
+    <!-- Right Sound Wave (DualBeat Output 2) -->
+    <path
+        android:pathData="M104,54 C104,48 100,44 96,48 C92,52 92,76 96,80 C100,84 104,80 104,74 Z"
+        android:fillColor="#7C4DFF"
+        android:fillAlpha="0.85" />
+    <path
+        android:pathData="M112,59 C112,56 110,54 108,56 C106,58 106,70 108,72 C110,74 112,72 112,69 Z"
+        android:fillColor="#7C4DFF"
+        android:fillAlpha="0.5" />
+
+    <!-- Modern Bold Geometric Capital "T" (Tesfa / DualBeat Core) -->
+    <!-- Horizontal Crossbar of "T" with dual accent gradient -->
+    <path
+        android:pathData="M38,34 L90,34 C93,34 95,36 95,39 L95,45 C95,48 93,50 90,50 L38,50 C35,50 33,48 33,45 L33,39 C33,36 35,34 38,34 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="33"
+                android:startY="42"
+                android:endX="95"
+                android:endY="42"
+                android:type="linear">
+                <item android:color="#00E5FF" android:offset="0.0" />
+                <item android:color="#00B0FF" android:offset="0.5" />
+                <item android:color="#7C4DFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Vertical Stem of "T" -->
+    <path
+        android:pathData="M57,48 L71,48 L71,92 C71,95 69,97 66,97 L62,97 C59,97 57,95 57,92 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="64"
+                android:startY="48"
+                android:endX="64"
+                android:endY="97"
+                android:type="linear">
+                <item android:color="#00B0FF" android:offset="0.0" />
+                <item android:color="#7C4DFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Center Pulse Audio Node Dot -->
+    <path
+        android:pathData="M64,96 A4,4 0 1,1 63.9,96"
+        android:fillColor="#00E5FF" />
+
+</vector>

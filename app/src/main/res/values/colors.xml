@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Primary & Secondary Accents -->
+    <color name="brand_primary">#00E5FF</color>
+    <color name="brand_primary_dark">#00B0FF</color>
+    <color name="brand_secondary">#7C4DFF</color>
+    <color name="brand_accent">#FF0055</color>
+
+    <!-- AMOLED Dark Palette -->
+    <color name="amoled_black">#000000</color>
+    <color name="surface_dark">#0D1117</color>
+    <color name="surface_dark_card">#161B22</color>
+    <color name="surface_dark_elevated">#21262D</color>
+
+    <!-- Light Palette -->
+    <color name="background_light">#F8F9FA</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="surface_light_card">#F1F3F5</color>
+
+    <!-- Text & Indicators -->
+    <color name="text_primary_dark">#F0F6FC</color>
+    <color name="text_secondary_dark">#8B949E</color>
+    <color name="text_primary_light">#1F2328</color>
+    <color name="text_secondary_light">#656D76</color>
+
+    <color name="status_success">#2EA043</color>
+    <color name="status_warning">#D29922</color>
+    <color name="status_error">#F85149</color>
+</resources>
