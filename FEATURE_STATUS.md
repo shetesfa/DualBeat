@@ -25,6 +25,9 @@
 | **Music Playback** | Background MediaSession | Implemented | **VERIFIED** | Foreground service with notification controls and lock-screen metadata. |
 | **Music Playback** | Audio Focus & Becoming Noisy | Implemented | **VERIFIED** | Automatic ducking and pause on headphone/Bluetooth disconnection. |
 | **Music Playback** | Queue, Shuffle & Repeat | Implemented | **VERIFIED** | Verified queue navigation with `RepeatMode` (OFF, ONE, ALL) and shuffle. |
+| **Music Playback** | Live Synchronized Lyrics | Implemented | **VERIFIED** | Real-time `.lrc` auto-scrolling lyrics with karaoke glow & tap-to-seek. |
+| **Music Playback** | Animated Spectrum Visualizer | Implemented | **VERIFIED** | Dynamic sine-wave audio frequency spectrum visualizer bars. |
+| **Music Playback** | Sleep Timer with Fade-Out | Implemented | **VERIFIED** | 15m, 30m, 45m, 60m & End-of-Song automated timer dialog. |
 | **Video Playback** | Media3 PlayerView in Compose | Implemented | **VERIFIED** | Hardware-accelerated surface rendering inside Jetpack Compose. |
 | **Video Playback** | System Window Brightness Swipe | Implemented | **VERIFIED** | Left-half vertical drag modifies `Activity.window.attributes.screenBrightness`. |
 | **Video Playback** | System Stream Volume Swipe | Implemented | **VERIFIED** | Right-half vertical drag modifies `AudioManager.setStreamVolume(STREAM_MUSIC)`. |

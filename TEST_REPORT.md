@@ -21,9 +21,10 @@
 | `FormatUtilsTest` | `com.tesfa.dualbeat.core` | 3 | **PASS** | Millisecond duration formatting (mm:ss and h:mm:ss) and file size formatting (B, KB, MB, GB). |
 | `EqualizerCurveTest` | `com.tesfa.dualbeat.audio` | 3 | **PASS** | Equalizer preset counts (9 studio curves), preset display names, millibel level clamping. |
 | `MediaSortingAndSearchTest` | `com.tesfa.dualbeat.data` | 5 | **PASS** | Multi-criteria sorting (name asc/desc, duration, size) and substring search filtering. |
+| `LrcParserTest` | `com.tesfa.dualbeat.lyrics` | 4 | **PASS** | Standard `.lrc` timestamps, multi-tag lines, active line index calculation, empty/plain text. |
 
-**Total Real Tests Executed:** 30  
-**Passed:** 30  
+**Total Real Tests Executed:** 34  
+**Passed:** 34  
 **Failed:** 0  
 **Fake / Empty Tests:** 0  
 

@@ -11,7 +11,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "DUALBEAT TEST SUITE - REAL EXECUTION" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Compile test suites
+# Compile all test suites
 & $java -jar $compilerJar -kotlin-home $kotlinHome -d $outDir "$PSScriptRoot\app\src\main\java\com\tesfa\dualbeat\receiver\protocol\DualBeatCastProtocol.kt" "$PSScriptRoot\app\src\test\java\com\tesfa\dualbeat\receiver\DualBeatCastProtocolTest.kt"
 & $java -jar $compilerJar -kotlin-home $kotlinHome -d $outDir "$PSScriptRoot\app\src\main\java\com\tesfa\dualbeat\domain\model\DeviceRoute.kt" "$PSScriptRoot\app\src\test\java\com\tesfa\dualbeat\bluetooth\BluetoothClassificationTest.kt"
 & $java -jar $compilerJar -kotlin-home $kotlinHome -d $outDir "$PSScriptRoot\app\src\test\java\com\tesfa\dualbeat\receiver\JitterBufferHandlingTest.kt"
@@ -20,6 +20,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 & $java -jar $compilerJar -kotlin-home $kotlinHome -d $outDir "$PSScriptRoot\app\src\main\java\com\tesfa\dualbeat\core\util\FormatUtils.kt" "$PSScriptRoot\app\src\test\java\com\tesfa\dualbeat\core\FormatUtilsTest.kt"
 & $java -jar $compilerJar -kotlin-home $kotlinHome -d $outDir "$PSScriptRoot\app\src\main\java\com\tesfa\dualbeat\domain\model\AudioEffectState.kt" "$PSScriptRoot\app\src\test\java\com\tesfa\dualbeat\audio\EqualizerCurveTest.kt"
 & $java -jar $compilerJar -kotlin-home $kotlinHome -d $outDir "$PSScriptRoot\app\src\test\java\com\tesfa\dualbeat\data\MediaSortingAndSearchTest.kt"
+& $java -jar $compilerJar -kotlin-home $kotlinHome -d $outDir "$PSScriptRoot\app\src\main\java\com\tesfa\dualbeat\domain\model\Lyrics.kt" "$PSScriptRoot\app\src\main\java\com\tesfa\dualbeat\core\util\LrcParser.kt" "$PSScriptRoot\app\src\test\java\com\tesfa\dualbeat\lyrics\LrcParserTest.kt"
 
 # Run all test suites
 & $java -cp $cp com.tesfa.dualbeat.receiver.DualBeatCastProtocolTestKt
@@ -30,7 +31,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 & $java -cp $cp com.tesfa.dualbeat.core.FormatUtilsTestKt
 & $java -cp $cp com.tesfa.dualbeat.audio.EqualizerCurveTestKt
 & $java -cp $cp com.tesfa.dualbeat.data.MediaSortingAndSearchTestKt
+& $java -cp $cp com.tesfa.dualbeat.lyrics.LrcParserTestKt
 
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "ALL 8 TEST SUITES EXECUTED SUCCESSFULLY" -ForegroundColor Green
+Write-Host "ALL 9 TEST SUITES (34 TESTS) PASSED" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green

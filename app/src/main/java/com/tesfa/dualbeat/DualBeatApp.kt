@@ -33,6 +33,8 @@ class DualBeatApp : Application() {
         private set
     lateinit var playlistRepository: PlaylistRepository
         private set
+    lateinit var lyricsRepository: com.tesfa.dualbeat.data.repository.LyricsRepository
+        private set
 
     // Playback Engines
     lateinit var musicController: MusicPlaybackController
@@ -70,6 +72,7 @@ class DualBeatApp : Application() {
             historyDao = database.playbackHistoryDao()
         )
         playlistRepository = PlaylistRepository(database.playlistDao())
+        lyricsRepository = com.tesfa.dualbeat.data.repository.LyricsRepository(this)
 
         musicController = MusicPlaybackController(this)
         videoController = VideoPlaybackController(this)
