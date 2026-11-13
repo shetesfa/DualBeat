@@ -23,6 +23,9 @@ data class ReceiverNode(
     val lastSeenTimestamp: Long = System.currentTimeMillis()
 )
 
+val ReceiverNode.isConnected: Boolean
+    get() = state == ReceiverState.CONNECTED_SYNCED
+
 data class ReceiverGroup(
     val id: String,
     val name: String,

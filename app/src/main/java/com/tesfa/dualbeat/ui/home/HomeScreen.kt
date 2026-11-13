@@ -46,7 +46,7 @@ fun HomeScreen(
         val granted = result.values.any { it }
         hasMediaPermission = PermissionManager.hasMediaPermissions(context)
         if (granted) {
-            viewModel.refreshAll()
+            viewModel.refresh()
         }
     }
 

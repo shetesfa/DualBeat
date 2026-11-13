@@ -176,7 +176,7 @@ class DualBeatCastClient(
         val headerBuffer = ByteArray(28) // 4 magic + 4 type + 8 seq + 8 pts + 4 size
 
         try {
-            while (isActive && !socket.isClosed) {
+            while (_isListening.value && !socket.isClosed) {
                 readFully(input, headerBuffer, 28)
                 val buf = ByteBuffer.wrap(headerBuffer).order(ByteOrder.BIG_ENDIAN)
                 val magic = buf.getInt()

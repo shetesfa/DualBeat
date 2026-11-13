@@ -60,8 +60,9 @@ fun FullMusicPlayerBottomSheet(
     val castServer = app.castServer
     val castClient = app.castClient
     val isTransmitterRunning by castServer.isBroadcasting.collectAsState()
-    val isReceiverRunning by castClient.isReceiving.collectAsState()
-    val discoveredReceivers by castServer.discoveredReceivers.collectAsState()
+    val isReceiverRunning by castClient.isListening.collectAsState()
+    val discoveredNodesMap by castServer.discoveredNodes.collectAsState()
+    val discoveredReceivers = remember(discoveredNodesMap) { discoveredNodesMap.values.toList() }
 
     // Fetch synchronized lyrics whenever track changes
     LaunchedEffect(track.id) {
@@ -221,17 +222,17 @@ fun FullMusicPlayerBottomSheet(
                                 isReceiverRunning = isReceiverRunning,
                                 discoveredReceivers = discoveredReceivers,
                                 onToggleTransmitter = {
-                                    if (isTransmitterRunning) castServer.stopServer() else castServer.startServer()
+                                    if (isTransmitterRunning) castServer.release() else castServer.startDiscovery()
                                 },
                                 onToggleReceiver = {
                                     if (isReceiverRunning) castClient.stopReceiverMode() else castClient.startReceiverMode()
                                 },
-                                onScanReceivers = { castServer.scanForReceivers() },
+                                onScanReceivers = { castServer.startDiscovery() },
                                 onToggleReceiverConnection = { receiver ->
                                     if (receiver.isConnected) {
-                                        castServer.disconnectReceiver(receiver)
+                                        castServer.disconnectReceiver(receiver.id)
                                     } else {
-                                        castServer.connectToReceiver(receiver)
+                                        scope.launch { castServer.connectToReceiver(receiver) }
                                     }
                                 }
                             )

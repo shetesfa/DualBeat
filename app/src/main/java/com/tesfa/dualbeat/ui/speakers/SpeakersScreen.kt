@@ -274,12 +274,12 @@ fun SpeakersScreen(
                             )
                         }
                         Switch(
-                            checked = state.isReceiverRunning,
-                            onCheckedChange = { viewModel.toggleReceiver() }
+                            checked = state.isReceiverModeActive,
+                            onCheckedChange = { viewModel.toggleReceiverMode(it) }
                         )
                     }
 
-                    if (state.isReceiverRunning) {
+                    if (state.isReceiverModeActive) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Receiver listening on TCP port 4242. Stream audio to this device from another DualBeat transmitter.",
