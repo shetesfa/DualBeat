@@ -17,8 +17,8 @@ data class SpeakersUiState(
         activeOutputName = "Phone Speaker",
         connectedBluetoothSinks = emptyList(),
         availableOutputs = emptyList(),
-        isSamsungDualAudioActive = false,
-        isMultiOutputSupportedByFirmware = false,
+        dualAudioStatus = com.tesfa.dualbeat.domain.model.DualAudioDetectionStatus.NOT_CONNECTED,
+        isPhysicalMultiOutputVerified = false,
         hardwareLimitationNotice = "Analyzing hardware..."
     ),
     val bondedDevices: List<BluetoothAudioDevice> = emptyList(),
@@ -26,7 +26,10 @@ data class SpeakersUiState(
     val isReceiverModeActive: Boolean = false,
     val isCastBroadcasting: Boolean = false,
     val isScanning: Boolean = false
-)
+) {
+    val isTransmitterRunning: Boolean
+        get() = isCastBroadcasting
+}
 
 class SpeakersViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -78,6 +81,23 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
     fun stopCastDiscovery() {
         _uiState.update { it.copy(isScanning = false) }
         castServer.stopDiscovery()
+    }
+
+    fun toggleTransmitter() {
+        if (_uiState.value.isCastBroadcasting) {
+            castServer.release()
+            stopCastDiscovery()
+        } else {
+            startCastDiscovery()
+        }
+    }
+
+    fun scanReceivers() {
+        startCastDiscovery()
+    }
+
+    fun toggleReceiverConnection(node: ReceiverNode) {
+        toggleReceiverSync(node)
     }
 
     fun toggleReceiverSync(node: ReceiverNode) {

@@ -1,5 +1,7 @@
 package com.tesfa.dualbeat.receiver
 
+import org.junit.Assert.*
+import org.junit.Test
 import java.util.concurrent.ConcurrentLinkedQueue
 
 class JitterBufferHandlingTest {
@@ -24,6 +26,7 @@ class JitterBufferHandlingTest {
         }
     }
 
+    @Test
     fun testJitterBufferCapacityAndDrain() {
         val maxBufferSize = 20
         val queue = ConcurrentLinkedQueue<TestAudioFrame>()
@@ -37,61 +40,70 @@ class JitterBufferHandlingTest {
             }
         }
 
-        check(queue.size == maxBufferSize) {
-            "Expected buffer size to be bounded at $maxBufferSize, but was ${queue.size}"
-        }
+        assertEquals("Expected buffer size to be bounded at $maxBufferSize", maxBufferSize, queue.size)
 
         val firstFrame = queue.peek()
-        check(firstFrame != null && firstFrame.seq == 6L) {
-            "Oldest frames 1..5 should have been pruned; expected seq 6 but got ${firstFrame?.seq}"
-        }
+        assertNotNull("First frame should not be null", firstFrame)
+        assertEquals("Oldest frames 1..5 should have been pruned; expected seq 6", 6L, firstFrame?.seq)
 
         // Drain entire queue
         var drainedCount = 0
         while (queue.poll() != null) {
             drainedCount++
         }
-        check(drainedCount == maxBufferSize) {
-            "Expected $maxBufferSize drained frames, got $drainedCount"
-        }
-        check(queue.isEmpty()) { "Queue should be empty after drain" }
-        println("  [PASS] testJitterBufferCapacityAndDrain")
+        assertEquals("Expected drained count mismatch", maxBufferSize, drainedCount)
+        assertTrue("Queue should be empty after drain", queue.isEmpty())
     }
 
+    @Test
     fun testSequenceDiscontinuityDetection() {
-        var lastSeq = 10L
+        val lastSeq = 10L
         val incomingSeq = 14L
 
         val hasGap = incomingSeq > lastSeq + 1
         val missedPackets = (incomingSeq - (lastSeq + 1)).toInt()
 
-        check(hasGap) { "Should detect sequence gap" }
-        check(missedPackets == 3) { "Expected 3 missed packets (11, 12, 13), got $missedPackets" }
-        println("  [PASS] testSequenceDiscontinuityDetection")
+        assertTrue("Should detect sequence gap", hasGap)
+        assertEquals("Expected 3 missed packets (11, 12, 13)", 3, missedPackets)
     }
 
+    @Test
     fun testPacketPayloadValidation() {
         val validSize = 4096
         val oversized = 100000 // exceeds MAX_PAYLOAD_SIZE (65536)
         val undersized = 0
 
-        check(isValidPayloadSize(validSize)) { "4096 bytes must be valid" }
-        check(!isValidPayloadSize(oversized)) { "100000 bytes must be rejected as oversized" }
-        check(!isValidPayloadSize(undersized)) { "0 bytes must be rejected as empty" }
-        println("  [PASS] testPacketPayloadValidation")
+        assertTrue("4096 bytes must be valid", isValidPayloadSize(validSize))
+        assertFalse("100000 bytes must be rejected as oversized", isValidPayloadSize(oversized))
+        assertFalse("0 bytes must be rejected as empty", isValidPayloadSize(undersized))
+    }
+
+    @Test
+    fun testBufferUnderrunBehavior() {
+        val queue = ConcurrentLinkedQueue<TestAudioFrame>()
+        val targetPrebuffer = 4
+
+        // Initially empty: underrun state
+        assertTrue("Queue is empty, represents underrun", queue.isEmpty())
+        assertTrue("Insufficient frames for playback", queue.size < targetPrebuffer)
+
+        // Add 3 frames (still below target of 4)
+        for (i in 1..3) {
+            queue.offer(TestAudioFrame(i.toLong(), 1000L + i * 20, ByteArray(128)))
+        }
+        assertTrue("Still below prebuffer threshold", queue.size < targetPrebuffer)
+
+        // Add 4th frame (reaches target threshold)
+        queue.offer(TestAudioFrame(4L, 1080L, ByteArray(128)))
+        assertTrue("Prebuffer target reached, playback can begin", queue.size >= targetPrebuffer)
+
+        // Drain all frames to trigger underrun again
+        while (queue.poll() != null) { }
+        assertTrue("Queue emptied: underrun triggered again for resync", queue.isEmpty())
     }
 
     private fun isValidPayloadSize(size: Int): Boolean {
         val maxPayload = 65536
         return size in 1..maxPayload
     }
-}
-
-fun main() {
-    println("--- Executing JitterBufferHandlingTest ---")
-    val test = JitterBufferHandlingTest()
-    test.testJitterBufferCapacityAndDrain()
-    test.testSequenceDiscontinuityDetection()
-    test.testPacketPayloadValidation()
-    println("=== JitterBufferHandlingTest: ALL TESTS PASSED ===")
 }

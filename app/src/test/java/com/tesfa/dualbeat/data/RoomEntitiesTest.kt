@@ -1,5 +1,8 @@
 package com.tesfa.dualbeat.data
 
+import org.junit.Assert.*
+import org.junit.Test
+
 enum class TestMediaType {
     AUDIO,
     VIDEO
@@ -39,6 +42,7 @@ data class TestPlaylistItemEntity(
 
 class RoomEntitiesTest {
 
+    @Test
     fun testFavoriteEntityCreationAndEquality() {
         val fav1 = TestFavoriteEntity(
             mediaId = 101L,
@@ -56,13 +60,13 @@ class RoomEntitiesTest {
             addedAt = 1700000000000L
         )
 
-        check(fav1 == fav2) { "Identical FavoriteEntities must be equal" }
-        check(fav1 != favVideo) { "Audio and Video favorites must not be equal" }
-        check(fav1.mediaId == 101L) { "mediaId mismatch" }
-        check(fav1.mediaType == "AUDIO") { "mediaType mismatch" }
-        println("  [PASS] testFavoriteEntityCreationAndEquality")
+        assertEquals("Identical FavoriteEntities must be equal", fav1, fav2)
+        assertNotEquals("Audio and Video favorites must not be equal", fav1, favVideo)
+        assertEquals("mediaId mismatch", 101L, fav1.mediaId)
+        assertEquals("mediaType mismatch", "AUDIO", fav1.mediaType)
     }
 
+    @Test
     fun testPlaybackHistoryProgressCalculation() {
         val history = TestPlaybackHistoryEntity(
             id = 1L,
@@ -76,40 +80,29 @@ class RoomEntitiesTest {
         )
 
         val progress = history.lastPositionMs.toFloat() / history.durationMs.toFloat()
-        check(progress == 0.5f) { "Expected 50% progress, got $progress" }
+        assertEquals("Expected 50% progress", 0.5f, progress, 0.001f)
 
         val completedHistory = history.copy(
             lastPositionMs = 180000L
         )
-        check(completedHistory.lastPositionMs == history.durationMs) { "History should be at end" }
-        check(completedHistory.lastPositionMs == 180000L) { "Updated position mismatch" }
-        println("  [PASS] testPlaybackHistoryProgressCalculation")
+        assertEquals("History should be at end", history.durationMs, completedHistory.lastPositionMs)
+        assertEquals("Updated position mismatch", 180000L, completedHistory.lastPositionMs)
     }
 
+    @Test
     fun testPlaylistItemMapping() {
         val playlist = TestPlaylistEntity(id = 10L, name = "Workout Beats", createdAt = 1700000000000L)
         val item1 = TestPlaylistItemEntity(playlistId = playlist.id, mediaId = 101L, mediaType = "AUDIO", orderIndex = 0)
         val item2 = TestPlaylistItemEntity(playlistId = playlist.id, mediaId = 102L, mediaType = "AUDIO", orderIndex = 1)
 
-        check(item1.playlistId == 10L) { "playlistId must match" }
-        check(item1.orderIndex == 0) { "Order must be 0" }
-        check(item2.orderIndex == 1) { "Order must be 1" }
-        println("  [PASS] testPlaylistItemMapping")
+        assertEquals("playlistId must match", 10L, item1.playlistId)
+        assertEquals("Order must be 0", 0, item1.orderIndex)
+        assertEquals("Order must be 1", 1, item2.orderIndex)
     }
 
+    @Test
     fun testMediaTypeEnumConversion() {
-        check(TestMediaType.valueOf("AUDIO") == TestMediaType.AUDIO) { "AUDIO enum mapping failed" }
-        check(TestMediaType.valueOf("VIDEO") == TestMediaType.VIDEO) { "VIDEO enum mapping failed" }
-        println("  [PASS] testMediaTypeEnumConversion")
+        assertEquals("AUDIO enum mapping failed", TestMediaType.AUDIO, TestMediaType.valueOf("AUDIO"))
+        assertEquals("VIDEO enum mapping failed", TestMediaType.VIDEO, TestMediaType.valueOf("VIDEO"))
     }
-}
-
-fun main() {
-    println("--- Executing RoomEntitiesTest ---")
-    val test = RoomEntitiesTest()
-    test.testFavoriteEntityCreationAndEquality()
-    test.testPlaybackHistoryProgressCalculation()
-    test.testPlaylistItemMapping()
-    test.testMediaTypeEnumConversion()
-    println("=== RoomEntitiesTest: ALL TESTS PASSED ===")
 }

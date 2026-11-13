@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-@UnstableApi
+@androidx.annotation.OptIn(UnstableApi::class)
 class DualBeatApp : Application() {
 
     // Database & Local Repositories

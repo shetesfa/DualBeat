@@ -358,8 +358,8 @@ fun SpeakersScreen(
             } else {
                 items(state.discoveredReceivers) { receiver ->
                     WiFilReceiverCard(
-                        receiver = receiver,
-                        onConnectClick = { viewModel.toggleReceiverConnection(receiver) }
+                        node = receiver,
+                        onConnectToggle = { viewModel.toggleReceiverConnection(receiver) }
                     )
                 }
             }

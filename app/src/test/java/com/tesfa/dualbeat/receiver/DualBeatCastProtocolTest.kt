@@ -1,26 +1,29 @@
 package com.tesfa.dualbeat.receiver
 
 import com.tesfa.dualbeat.receiver.protocol.DualBeatCastProtocol
+import org.junit.Assert.*
+import org.junit.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class DualBeatCastProtocolTest {
 
+    @Test
     fun testBuildAndParseDiscoveryPongPacket() {
         val deviceName = "Galaxy A24 Speaker"
         val deviceId = "node-8991"
 
         val packet = DualBeatCastProtocol.buildDiscoveryPongPacket(deviceName, deviceId)
-        check(packet.isNotEmpty()) { "Packet should not be empty" }
-        check(packet.size > 16) { "Packet should exceed header length" }
+        assertTrue("Packet should not be empty", packet.isNotEmpty())
+        assertTrue("Packet should exceed header length", packet.size > 16)
 
         val parsed = DualBeatCastProtocol.parseDiscoveryPacket(packet, packet.size)
-        check(parsed != null) { "Parsed packet should not be null" }
-        check(parsed.first == deviceName) { "Expected $deviceName but got ${parsed.first}" }
-        check(parsed.second == deviceId) { "Expected $deviceId but got ${parsed.second}" }
-        println("  [PASS] testBuildAndParseDiscoveryPongPacket")
+        assertNotNull("Parsed packet should not be null", parsed)
+        assertEquals("Expected deviceName mismatch", deviceName, parsed?.first)
+        assertEquals("Expected deviceId mismatch", deviceId, parsed?.second)
     }
 
+    @Test
     fun testBuildAudioPacketHeaderAndPayload() {
         val pcmData = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8)
         val seq = 42L
@@ -34,34 +37,48 @@ class DualBeatCastProtocolTest {
             size = pcmData.size
         )
 
-        check(packet.size == 28 + pcmData.size) { "Expected ${28 + pcmData.size} but got ${packet.size}" }
+        assertEquals("Packet size mismatch", 28 + pcmData.size, packet.size)
 
         val buffer = ByteBuffer.wrap(packet).order(ByteOrder.BIG_ENDIAN)
-        check(buffer.getInt() == DualBeatCastProtocol.MAGIC_HEADER) { "Invalid magic header" }
-        check(buffer.getInt() == DualBeatCastProtocol.TYPE_AUDIO_DATA) { "Invalid packet type" }
-        check(buffer.getLong() == seq) { "Invalid sequence number" }
-        check(buffer.getLong() == pts) { "Invalid PTS timestamp" }
-        check(buffer.getInt() == pcmData.size) { "Invalid payload size" }
+        assertEquals("Invalid magic header", DualBeatCastProtocol.MAGIC_HEADER, buffer.getInt())
+        assertEquals("Invalid packet type", DualBeatCastProtocol.TYPE_AUDIO_DATA, buffer.getInt())
+        assertEquals("Invalid sequence number", seq, buffer.getLong())
+        assertEquals("Invalid PTS timestamp", pts, buffer.getLong())
+        assertEquals("Invalid payload size", pcmData.size, buffer.getInt())
 
         val payload = ByteArray(pcmData.size)
         buffer.get(payload)
-        check(payload.contentEquals(pcmData)) { "Payload content mismatch" }
-        println("  [PASS] testBuildAudioPacketHeaderAndPayload")
+        assertArrayEquals("Payload content mismatch", pcmData, payload)
     }
 
+    @Test
     fun testRejectInvalidMagicHeader() {
         val corrupted = byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         val parsed = DualBeatCastProtocol.parseDiscoveryPacket(corrupted, corrupted.size)
-        check(parsed == null) { "Corrupted packet must be rejected" }
-        println("  [PASS] testRejectInvalidMagicHeader")
+        assertNull("Corrupted packet must be rejected", parsed)
     }
-}
 
-fun main() {
-    println("--- Executing DualBeatCastProtocolTest ---")
-    val test = DualBeatCastProtocolTest()
-    test.testBuildAndParseDiscoveryPongPacket()
-    test.testBuildAudioPacketHeaderAndPayload()
-    test.testRejectInvalidMagicHeader()
-    println("=== DualBeatCastProtocolTest: ALL TESTS PASSED ===")
+    @Test
+    fun testRejectOversizedOrMalformedPackets() {
+        // Less than minimum 8 bytes header
+        val shortPacket = byteArrayOf(0x44, 0x42, 0x45)
+        val parsedShort = DualBeatCastProtocol.parseDiscoveryPacket(shortPacket, shortPacket.size)
+        assertNull("Short packet (< 8 bytes) must be rejected", parsedShort)
+
+        // Invalid packet type
+        val wrongTypeBuf = ByteBuffer.allocate(16).order(ByteOrder.BIG_ENDIAN)
+        wrongTypeBuf.putInt(DualBeatCastProtocol.MAGIC_HEADER)
+        wrongTypeBuf.putInt(999) // Invalid type
+        val parsedWrong = DualBeatCastProtocol.parseDiscoveryPacket(wrongTypeBuf.array(), 16)
+        assertNull("Invalid packet type must be rejected", parsedWrong)
+    }
+
+    @Test
+    fun testAudioFormatConstants() {
+        assertEquals(44100, DualBeatCastProtocol.SAMPLE_RATE)
+        assertEquals(2, DualBeatCastProtocol.CHANNELS)
+        assertEquals(2, DualBeatCastProtocol.BYTES_PER_SAMPLE)
+        assertEquals(8990, DualBeatCastProtocol.DISCOVERY_PORT)
+        assertEquals(8991, DualBeatCastProtocol.STREAM_PORT)
+    }
 }

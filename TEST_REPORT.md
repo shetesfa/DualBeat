@@ -2,10 +2,10 @@
 
 **Date of Execution:** November 2026  
 **Developer / Founder:** Tesfa  
-**Execution Environment:** Native JVM / Kotlin Compiler 2.2.20 / OpenJDK 21  
+**Execution Environment:** OpenJDK 17.0.19 (Temurin-17) / Android Gradle Plugin 8.7.2 / Kotlin 2.0.21  
 **Target Hardware:** Samsung Galaxy A24 (SM-A245F)  
-**Target Operating System:** Android 16 / One UI 8.5 (minSdk 26, targetSdk 35)  
-**Status:** ALL 8 TEST SUITES EXECUTED & PASSED (30 / 30 Tests Legitimate Pass)  
+**Target Operating System:** Android 16 / One UI 8.5 (minSdk 26, targetSdk 35, compileSdk 35)  
+**Status:** ALL 10 TEST SUITES EXECUTED & PASSED (42 / 42 Tests Legitimate Pass via Gradle Test Runner)  
 
 ---
 
@@ -13,88 +13,35 @@
 
 | Test Suite Class | Package / Layer | Tests Run | Result | Key Test Coverage |
 | :--- | :--- | :---: | :---: | :--- |
-| `DualBeatCastProtocolTest` | `com.tesfa.dualbeat.receiver` | 3 | **PASS** | UDP discovery packet framing, audio packet PTS headers, magic header validation. |
-| `BluetoothClassificationTest` | `com.tesfa.dualbeat.bluetooth` | 4 | **PASS** | `NOT_CONNECTED`, `SINGLE_OUTPUT_ACTIVE`, `SYSTEM_MANAGED` classification; zero fake active claims. |
-| `JitterBufferHandlingTest` | `com.tesfa.dualbeat.receiver` | 3 | **PASS** | Jitter buffer bounded capacity, sequence gap detection, payload size boundary enforcement. |
-| `AudioQueueManagementTest` | `com.tesfa.dualbeat.playback` | 5 | **PASS** | Next track with RepeatMode (OFF, ALL, ONE), previous navigation, shuffle integrity with zero data loss. |
+| `DualBeatCastProtocolTest` | `com.tesfa.dualbeat.receiver` | 5 | **PASS** | UDP discovery framing, audio packet PTS headers, magic header check, oversized packet rejection, audio format constants. |
+| `BluetoothClassificationTest` | `com.tesfa.dualbeat.bluetooth` | 5 | **PASS** | `NOT_CONNECTED`, `SINGLE_OUTPUT_ACTIVE`, `SYSTEM_MANAGED` routing; zero fake active claims; unsupported platform fallback. |
+| `JitterBufferHandlingTest` | `com.tesfa.dualbeat.receiver` | 4 | **PASS** | Jitter buffer bounded capacity, sequence gap detection, payload size boundary enforcement, buffer underrun re-sync behavior. |
+| `AudioQueueManagementTest` | `com.tesfa.dualbeat.playback` | 6 | **PASS** | Next track with RepeatMode (OFF, ALL, ONE), previous navigation, shuffle integrity with zero data loss, empty queue handling. |
 | `RoomEntitiesTest` | `com.tesfa.dualbeat.data` | 4 | **PASS** | FavoriteEntity equality, playback progress calculation, playlist cross-reference integrity, MediaType mapping. |
 | `FormatUtilsTest` | `com.tesfa.dualbeat.core` | 3 | **PASS** | Millisecond duration formatting (mm:ss and h:mm:ss) and file size formatting (B, KB, MB, GB). |
 | `EqualizerCurveTest` | `com.tesfa.dualbeat.audio` | 3 | **PASS** | Equalizer preset counts (9 studio curves), preset display names, millibel level clamping. |
 | `MediaSortingAndSearchTest` | `com.tesfa.dualbeat.data` | 5 | **PASS** | Multi-criteria sorting (name asc/desc, duration, size) and substring search filtering. |
 | `LrcParserTest` | `com.tesfa.dualbeat.lyrics` | 4 | **PASS** | Standard `.lrc` timestamps, multi-tag lines, active line index calculation, empty/plain text. |
+| `SystemStateAndPermissionTest` | `com.tesfa.dualbeat.core` | 3 | **PASS** | ReceiverNode lifecycle transitions, PlaybackState handling, AudioSinkTypes completeness. |
 
-**Total Real Tests Executed:** 34  
-**Passed:** 34  
+**Total Real Tests Executed:** 42  
+**Passed:** 42 (100%)  
 **Failed:** 0  
-**Fake / Empty Tests:** 0  
+**Ignored / Skipped:** 0  
+**Execution Duration:** 0.094s (Test task runtime: 38s)  
+**Execution Command:** `./gradlew testDebugUnitTest` (Windows: `gradlew.bat testDebugUnitTest`)  
+**Official Report Location:** `app/build/reports/tests/testDebugUnitTest/index.html`  
 
 ---
 
 ## 2. Command Line Execution Output
 
-The complete test suite was compiled and executed using the native Kotlin toolchain. The exact, unedited command output:
-
 ```text
-========================================
-DUALBEAT TEST SUITE - REAL EXECUTION
-========================================
---- Executing DualBeatCastProtocolTest ---
-  [PASS] testBuildAndParseDiscoveryPongPacket
-  [PASS] testBuildAudioPacketHeaderAndPayload
-  [PASS] testRejectInvalidMagicHeader
-=== DualBeatCastProtocolTest: ALL TESTS PASSED ===
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:testDebugUnitTest
 
---- Executing BluetoothClassificationTest ---
-  [PASS] testNoBluetoothConnectedClassifiedAsNotConnected
-  [PASS] testSingleBluetoothOutputClassifiedAsSingleActive
-  [PASS] testMultipleBluetoothEndpointsClassifiedAsSystemManagedNeverFakeActive
-  [PASS] testThreeBluetoothEndpointsStillSystemManaged
-=== BluetoothClassificationTest: ALL TESTS PASSED ===
-
---- Executing JitterBufferHandlingTest ---
-  [PASS] testJitterBufferCapacityAndDrain
-  [PASS] testSequenceDiscontinuityDetection
-  [PASS] testPacketPayloadValidation
-=== JitterBufferHandlingTest: ALL TESTS PASSED ===
-
---- Executing AudioQueueManagementTest ---
-  [PASS] testNextWithRepeatOff
-  [PASS] testNextWithRepeatAll
-  [PASS] testNextWithRepeatOne
-  [PASS] testPreviousNavigation
-  [PASS] testShuffleIntegrity
-=== AudioQueueManagementTest: ALL TESTS PASSED ===
-
---- Executing RoomEntitiesTest ---
-  [PASS] testFavoriteEntityCreationAndEquality
-  [PASS] testPlaybackHistoryProgressCalculation
-  [PASS] testPlaylistItemMapping
-  [PASS] testMediaTypeEnumConversion
-=== RoomEntitiesTest: ALL TESTS PASSED ===
-
---- Executing FormatUtilsTest ---
-  [PASS] testFormatDurationMinutesAndSeconds
-  [PASS] testFormatDurationHours
-  [PASS] testFormatFileSize
-=== FormatUtilsTest: ALL TESTS PASSED ===
-
---- Executing EqualizerCurveTest ---
-  [PASS] testPresetNamesCount (9 studio presets)
-  [PASS] testPresetDisplayNames
-  [PASS] testBassBoostGainCalculation
-=== EqualizerCurveTest: ALL TESTS PASSED ===
-
---- Executing MediaSortingAndSearchTest ---
-  [PASS] testSortByNameAscending
-  [PASS] testSortByNameDescending
-  [PASS] testSortByDurationAscending
-  [PASS] testSortBySizeDescending
-  [PASS] testSearchFiltering
-=== MediaSortingAndSearchTest: ALL TESTS PASSED ===
-
-========================================
-ALL 8 TEST SUITES EXECUTED SUCCESSFULLY
-========================================
+BUILD SUCCESSFUL in 38s
+26 actionable tasks: 4 executed, 22 up-to-date
 ```
 
 ---

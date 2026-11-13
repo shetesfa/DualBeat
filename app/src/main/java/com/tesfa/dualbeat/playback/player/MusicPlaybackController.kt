@@ -33,7 +33,7 @@ data class PlaybackState(
     val errorMessage: String? = null
 )
 
-@UnstableApi
+@androidx.annotation.OptIn(UnstableApi::class)
 class MusicPlaybackController(
     private val context: Context,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())

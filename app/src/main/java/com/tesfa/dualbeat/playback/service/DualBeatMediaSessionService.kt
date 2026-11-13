@@ -16,7 +16,7 @@ import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionToken
 import com.tesfa.dualbeat.MainActivity
 
-@UnstableApi
+@androidx.annotation.OptIn(UnstableApi::class)
 class DualBeatMediaSessionService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null

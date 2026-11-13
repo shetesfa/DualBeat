@@ -25,6 +25,7 @@ import com.tesfa.dualbeat.DualBeatApp
 import com.tesfa.dualbeat.core.util.FormatUtils
 import com.tesfa.dualbeat.domain.model.LyricsData
 import com.tesfa.dualbeat.domain.model.ReceiverNode
+import com.tesfa.dualbeat.domain.model.isConnected
 import com.tesfa.dualbeat.playback.player.MusicPlaybackController
 import com.tesfa.dualbeat.playback.player.PlaybackState
 import com.tesfa.dualbeat.playback.player.RepeatMode
