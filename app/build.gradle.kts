@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "com.tesfa.dualbeat"
-    compileSdk = 35
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.tesfa.dualbeat"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 2
-        versionName = "1.2.1"
+        targetSdk = 34
+        versionCode = 3
+        versionName = "1.2.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
