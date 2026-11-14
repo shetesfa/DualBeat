@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -28,14 +31,25 @@ android {
         }
     }
 
+    val localProperties = Properties().apply {
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            FileInputStream(localPropertiesFile).use { load(it) }
+        }
+    }
+
     signingConfigs {
         create("release") {
             val keystorePath = System.getenv("KEYSTORE_FILE")
+                ?: localProperties.getProperty("RELEASE_KEYSTORE_FILE")
             if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
                 storeFile = file(keystorePath)
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
+                    ?: localProperties.getProperty("RELEASE_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
+                    ?: localProperties.getProperty("RELEASE_KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
+                    ?: localProperties.getProperty("RELEASE_KEY_PASSWORD")
             }
         }
     }
@@ -49,6 +63,7 @@ android {
                 "proguard-rules.pro"
             )
             val keystorePath = System.getenv("KEYSTORE_FILE")
+                ?: localProperties.getProperty("RELEASE_KEYSTORE_FILE")
             if (!keystorePath.isNullOrBlank() && file(keystorePath).exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
