@@ -64,10 +64,10 @@ fun DeveloperProfileScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Prepared resource location for Tesfa's real photo
+                    // Real photo of Developer Tesfa (3:4 ratio)
                     Image(
-                        painter = painterResource(id = R.drawable.ic_developer_placeholder),
-                        contentDescription = "Developer Portrait Placeholder",
+                        painter = painterResource(id = R.drawable.img_developer_tesfa),
+                        contentDescription = "Tesfa — Founder & Developer",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
