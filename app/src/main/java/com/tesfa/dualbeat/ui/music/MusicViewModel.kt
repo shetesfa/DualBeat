@@ -94,6 +94,31 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(selectedFolder = null, searchQuery = "") }
     }
 
+    fun playAll() {
+        val list = if (_uiState.value.searchQuery.isNotBlank()) {
+            mediaRepo.searchAudio(_uiState.value.searchQuery)
+        } else {
+            _uiState.value.tracks
+        }
+        if (list.isNotEmpty()) {
+            musicController.playQueue(list, 0)
+        }
+    }
+
+    fun shuffleAll() {
+        val list = if (_uiState.value.searchQuery.isNotBlank()) {
+            mediaRepo.searchAudio(_uiState.value.searchQuery)
+        } else {
+            _uiState.value.tracks
+        }
+        if (list.isNotEmpty()) {
+            if (!_uiState.value.playbackState.isShuffleEnabled) {
+                musicController.toggleShuffle()
+            }
+            musicController.playQueue(list.shuffled(), 0)
+        }
+    }
+
     fun playTrack(track: AudioTrack) {
         val tracksToPlay = if (_uiState.value.searchQuery.isNotBlank()) {
             mediaRepo.searchAudio(_uiState.value.searchQuery)

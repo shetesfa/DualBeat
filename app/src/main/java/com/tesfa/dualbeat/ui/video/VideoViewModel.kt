@@ -4,14 +4,23 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tesfa.dualbeat.DualBeatApp
+import com.tesfa.dualbeat.domain.model.MediaFolder
 import com.tesfa.dualbeat.domain.model.MediaType
 import com.tesfa.dualbeat.domain.model.VideoItem
 import com.tesfa.dualbeat.playback.player.VideoPlaybackState
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+enum class VideoViewMode {
+    FOLDERS,
+    ALL_VIDEOS
+}
+
 data class VideoUiState(
     val videos: List<VideoItem> = emptyList(),
+    val folders: List<MediaFolder> = emptyList(),
+    val selectedFolder: MediaFolder? = null,
+    val viewMode: VideoViewMode = VideoViewMode.FOLDERS,
     val searchQuery: String = "",
     val playbackState: VideoPlaybackState = VideoPlaybackState()
 )
@@ -33,16 +42,27 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             combine(
                 mediaRepo.videos,
+                mediaRepo.folders,
                 videoController.videoState
-            ) { videos, videoState ->
+            ) { videos, folders, videoState ->
+                val videoFolders = folders.filter { it.videoCount > 0 }
                 _uiState.update { current ->
                     current.copy(
                         videos = videos,
+                        folders = videoFolders,
                         playbackState = videoState
                     )
                 }
             }.collect()
         }
+    }
+
+    fun setViewMode(mode: VideoViewMode) {
+        _uiState.update { it.copy(viewMode = mode, selectedFolder = null) }
+    }
+
+    fun selectFolder(folder: MediaFolder?) {
+        _uiState.update { it.copy(selectedFolder = folder) }
     }
 
     fun setSearchQuery(query: String) {

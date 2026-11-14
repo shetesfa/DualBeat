@@ -28,26 +28,49 @@ fun SongListItem(
     onFavoriteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    Card(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
             .clickable { onClick() },
-        color = if (isPlaying) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
-        else MaterialTheme.colorScheme.surface
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPlaying) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            }
+        ),
+        border = if (isPlaying) {
+            androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+        } else null
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (isPlaying) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant
+                        if (isPlaying) {
+                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.tertiary
+                                )
+                            )
+                        } else {
+                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                    MaterialTheme.colorScheme.surfaceContainerHigh
+                                )
+                            )
+                        }
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -55,7 +78,7 @@ fun SongListItem(
                     imageVector = if (isPlaying) Icons.Rounded.GraphicEq else Icons.Rounded.MusicNote,
                     contentDescription = null,
                     tint = if (isPlaying) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
 
@@ -65,13 +88,14 @@ fun SongListItem(
                 Text(
                     text = track.title,
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium,
+                        fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
                         fontSize = 15.sp
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -90,7 +114,7 @@ fun SongListItem(
                     )
                     Text(
                         text = FormatUtils.formatDuration(track.durationMs),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -247,6 +271,89 @@ fun FolderListItem(
                 contentDescription = "Open Folder",
                 tint = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun VideoFolderCard(
+    folder: MediaFolder,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.FolderSpecial,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = folder.name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "${folder.videoCount} ${if (folder.videoCount == 1) "video" else "videos"}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Text(
+                        text = FormatUtils.formatFileSize(folder.totalSizeBytes),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = "View Videos",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
