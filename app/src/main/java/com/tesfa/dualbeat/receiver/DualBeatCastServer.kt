@@ -7,12 +7,16 @@ import com.tesfa.dualbeat.domain.model.ReceiverNode
 import com.tesfa.dualbeat.domain.model.ReceiverState
 import com.tesfa.dualbeat.receiver.protocol.DualBeatCastProtocol
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.OutputStream
 import java.net.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentHashMap
 
 class DualBeatCastServer(
     private val context: Context,
@@ -32,7 +36,9 @@ class DualBeatCastServer(
     private var wifiLock: WifiManager.WifiLock? = null
 
     private var discoveryJob: Job? = null
-    private val connectedClients = mutableMapOf<String, Socket>()
+    private val connectedClients = ConcurrentHashMap<String, Pair<Socket, OutputStream>>()
+    private val audioPacketChannel = Channel<ByteArray>(capacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private var writerJob: Job? = null
 
     private var packetSequence: Long = 0L
 
@@ -128,6 +134,7 @@ class DualBeatCastServer(
                             if (parsed != null) {
                                 val (name, id) = parsed
                                 val ip = rxPacket.address.hostAddress ?: "Unknown IP"
+                                if (ip == localIp || ip == "127.0.0.1") continue
                                 val currentMap = _discoveredNodes.value.toMutableMap()
                                 val isAlreadyConnected = connectedClients.containsKey(id) || connectedClients.containsKey(ip)
                                 currentMap[id] = ReceiverNode(
@@ -167,7 +174,8 @@ class DualBeatCastServer(
             val socket = Socket()
             socket.connect(InetSocketAddress(node.ipAddress, node.port), 4000)
             socket.tcpNoDelay = true
-            connectedClients[node.id] = socket
+            connectedClients[node.id] = Pair(socket, socket.getOutputStream())
+            startWriterLoop()
 
             val currentMap = _discoveredNodes.value.toMutableMap()
             currentMap[node.id] = node.copy(state = ReceiverState.CONNECTED_SYNCED)
@@ -191,7 +199,8 @@ class DualBeatCastServer(
             socket.tcpNoDelay = true
 
             val id = "direct_$ip"
-            connectedClients[id] = socket
+            connectedClients[id] = Pair(socket, socket.getOutputStream())
+            startWriterLoop()
 
             val node = ReceiverNode(
                 id = id,
@@ -212,10 +221,35 @@ class DualBeatCastServer(
         }
     }
 
+    private fun startWriterLoop() {
+        if (writerJob?.isActive == true) return
+        writerJob = scope.launch(Dispatchers.IO) {
+            for (packet in audioPacketChannel) {
+                if (connectedClients.isEmpty()) continue
+                val deadClients = mutableListOf<String>()
+                for ((id, clientPair) in connectedClients) {
+                    try {
+                        val out = clientPair.second
+                        out.write(packet)
+                        out.flush()
+                    } catch (e: Exception) {
+                        deadClients.add(id)
+                    }
+                }
+                deadClients.forEach { disconnectReceiver(it) }
+            }
+        }
+    }
+
+    private fun stopWriterLoop() {
+        writerJob?.cancel()
+        writerJob = null
+    }
+
     fun disconnectReceiver(nodeId: String) {
-        val socket = connectedClients.remove(nodeId)
+        val clientPair = connectedClients.remove(nodeId)
         try {
-            socket?.close()
+            clientPair?.first?.close()
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -226,6 +260,7 @@ class DualBeatCastServer(
         }
         if (connectedClients.isEmpty()) {
             _isBroadcasting.value = false
+            stopWriterLoop()
         }
     }
 
@@ -239,25 +274,13 @@ class DualBeatCastServer(
             offset = offset,
             size = size
         )
-
-        scope.launch(Dispatchers.IO) {
-            val deadClients = mutableListOf<String>()
-            for ((id, socket) in connectedClients) {
-                try {
-                    val out = socket.getOutputStream()
-                    out.write(packet)
-                    out.flush()
-                } catch (e: Exception) {
-                    deadClients.add(id)
-                }
-            }
-            deadClients.forEach { disconnectReceiver(it) }
-        }
+        audioPacketChannel.trySend(packet)
     }
 
     fun release() {
         stopDiscovery()
-        connectedClients.values.forEach { runCatching { it.close() } }
+        stopWriterLoop()
+        connectedClients.values.forEach { runCatching { it.first.close() } }
         connectedClients.clear()
         _isBroadcasting.value = false
         releaseNetworkLocks()

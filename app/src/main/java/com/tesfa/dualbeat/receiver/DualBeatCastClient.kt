@@ -15,6 +15,7 @@ import java.io.InputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.ByteBuffer
@@ -115,7 +116,9 @@ class DualBeatCastClient(
         beaconJob = scope.launch {
             var datagramSocket: DatagramSocket? = null
             try {
-                datagramSocket = DatagramSocket(DualBeatCastProtocol.DISCOVERY_PORT).apply {
+                datagramSocket = DatagramSocket(null).apply {
+                    reuseAddress = true
+                    bind(InetSocketAddress(DualBeatCastProtocol.DISCOVERY_PORT))
                     broadcast = true
                     soTimeout = 1500
                 }
