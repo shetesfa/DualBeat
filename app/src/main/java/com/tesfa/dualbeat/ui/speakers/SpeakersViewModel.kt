@@ -25,7 +25,10 @@ data class SpeakersUiState(
     val discoveredReceivers: List<ReceiverNode> = emptyList(),
     val isReceiverModeActive: Boolean = false,
     val isCastBroadcasting: Boolean = false,
-    val isScanning: Boolean = false
+    val isScanning: Boolean = false,
+    val localIpAddress: String = "Searching...",
+    val manualIpInput: String = "",
+    val connectionStatusMessage: String? = null
 ) {
     val isTransmitterRunning: Boolean
         get() = isCastBroadcasting
@@ -36,8 +39,8 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
     private val app = application as DualBeatApp
     private val btManager = app.bluetoothDeviceManager
     private val multiBtEngine = app.multiBluetoothEngine
-    private val castServer = app.castServer
-    private val castClient = app.castClient
+    val castServer = app.castServer
+    val castClient = app.castClient
 
     private val _uiState = MutableStateFlow(SpeakersUiState())
     val uiState: StateFlow<SpeakersUiState> = _uiState.asStateFlow()
@@ -53,14 +56,16 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
                 btManager.bondedDevices,
                 castServer.discoveredNodes,
                 castServer.isBroadcasting,
-                castClient.isListening
-            ) { bonded, receiversMap, isBroadcasting, isReceiving ->
+                castClient.isListening,
+                castClient.localIpAddress
+            ) { bonded, receiversMap, isBroadcasting, isReceiving, receiverIp ->
                 _uiState.update { current ->
                     current.copy(
                         bondedDevices = bonded,
                         discoveredReceivers = receiversMap.values.toList(),
                         isCastBroadcasting = isBroadcasting,
                         isReceiverModeActive = isReceiving,
+                        localIpAddress = if (isReceiving) receiverIp else castServer.localIpAddress.value,
                         routeReport = multiBtEngine.analyzeRoutingCapabilities()
                     )
                 }
@@ -68,13 +73,24 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun setManualIpInput(ip: String) {
+        _uiState.update { it.copy(manualIpInput = ip) }
+    }
+
     fun refreshAll() {
         btManager.refreshDevices()
-        _uiState.update { it.copy(routeReport = multiBtEngine.analyzeRoutingCapabilities()) }
+        castServer.updateLocalIp()
+        castClient.updateLocalIp()
+        _uiState.update {
+            it.copy(
+                routeReport = multiBtEngine.analyzeRoutingCapabilities(),
+                localIpAddress = if (it.isReceiverModeActive) castClient.localIpAddress.value else castServer.localIpAddress.value
+            )
+        }
     }
 
     fun startCastDiscovery() {
-        _uiState.update { it.copy(isScanning = true) }
+        _uiState.update { it.copy(isScanning = true, connectionStatusMessage = "Broadcasting discovery beacons across Wi-Fi/Hotspot...") }
         castServer.startDiscovery()
     }
 
@@ -87,8 +103,10 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
         if (_uiState.value.isCastBroadcasting) {
             castServer.release()
             stopCastDiscovery()
+            _uiState.update { it.copy(connectionStatusMessage = "Transmitter stopped.") }
         } else {
             startCastDiscovery()
+            _uiState.update { it.copy(connectionStatusMessage = "Transmitter active. Sound from DualBeat will stream to connected receivers.") }
         }
     }
 
@@ -97,15 +115,37 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleReceiverConnection(node: ReceiverNode) {
-        toggleReceiverSync(node)
-    }
-
-    fun toggleReceiverSync(node: ReceiverNode) {
         viewModelScope.launch {
             if (node.state == com.tesfa.dualbeat.domain.model.ReceiverState.CONNECTED_SYNCED) {
                 castServer.disconnectReceiver(node.id)
+                _uiState.update { it.copy(connectionStatusMessage = "Disconnected from ${node.name}") }
             } else {
-                castServer.connectToReceiver(node)
+                _uiState.update { it.copy(connectionStatusMessage = "Connecting to ${node.name} (${node.ipAddress})...") }
+                val success = castServer.connectToReceiver(node)
+                _uiState.update {
+                    it.copy(
+                        connectionStatusMessage = if (success) "Successfully connected to ${node.name}! Audio streaming is active."
+                        else "Failed to connect to ${node.name} at ${node.ipAddress}. Ensure Wi-Fi/Hotspot is active."
+                    )
+                }
+            }
+        }
+    }
+
+    fun connectDirectByIp() {
+        val ip = _uiState.value.manualIpInput.trim()
+        if (ip.isBlank()) {
+            _uiState.update { it.copy(connectionStatusMessage = "Please enter receiver's IP address") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(connectionStatusMessage = "Connecting directly to IP $ip:8991...") }
+            val success = castServer.connectToReceiverByIp(ip)
+            _uiState.update {
+                it.copy(
+                    connectionStatusMessage = if (success) "Connected to $ip! Audio is now synchronized."
+                    else "Connection failed to $ip. Check that Receiver Mode is ON on the second phone."
+                )
             }
         }
     }
@@ -113,8 +153,15 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
     fun toggleReceiverMode(enable: Boolean) {
         if (enable) {
             castClient.startReceiverMode()
+            _uiState.update {
+                it.copy(
+                    localIpAddress = castClient.localIpAddress.value,
+                    connectionStatusMessage = "Receiver Mode Active! IP: ${castClient.localIpAddress.value} on port 8991"
+                )
+            }
         } else {
             castClient.stopReceiverMode()
+            _uiState.update { it.copy(connectionStatusMessage = "Receiver Mode Stopped.") }
         }
     }
 }

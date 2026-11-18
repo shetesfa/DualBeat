@@ -4,6 +4,8 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.net.wifi.WifiManager
+import com.tesfa.dualbeat.core.util.NetworkUtils
 import com.tesfa.dualbeat.receiver.protocol.DualBeatCastProtocol
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.io.InputStream
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.ByteBuffer
@@ -27,7 +30,7 @@ data class JitterBufferPacket(
 
 class DualBeatCastClient(
     private val context: Context,
-    private val clientName: String = "DualBeat Receiver ${android.os.Build.MODEL}",
+    private val clientName: String = "DualBeat Speaker (${android.os.Build.MODEL})",
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 ) {
 
@@ -41,6 +44,12 @@ class DualBeatCastClient(
 
     private val _bufferFillPercent = MutableStateFlow(0)
     val bufferFillPercent: StateFlow<Int> = _bufferFillPercent.asStateFlow()
+
+    private val _localIpAddress = MutableStateFlow("Searching...")
+    val localIpAddress: StateFlow<String> = _localIpAddress.asStateFlow()
+
+    private var multicastLock: WifiManager.MulticastLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     private var beaconJob: Job? = null
     private var streamJob: Job? = null
@@ -57,8 +66,49 @@ class DualBeatCastClient(
         if (_isListening.value) return
         _isListening.value = true
 
+        acquireNetworkLocks()
+        updateLocalIp()
+
         startBeaconResponder()
         startStreamServer()
+    }
+
+    private fun acquireNetworkLocks() {
+        try {
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            if (wifiManager != null) {
+                multicastLock = wifiManager.createMulticastLock("DualBeatReceiverMulticast").apply {
+                    setReferenceCounted(true)
+                    acquire()
+                }
+                @Suppress("DEPRECATION")
+                wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "DualBeatReceiverWifi").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun releaseNetworkLocks() {
+        try {
+            if (multicastLock?.isHeld == true) {
+                multicastLock?.release()
+            }
+            if (wifiLock?.isHeld == true) {
+                wifiLock?.release()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        multicastLock = null
+        wifiLock = null
+    }
+
+    fun updateLocalIp() {
+        _localIpAddress.value = NetworkUtils.getPrimaryIpAddress()
     }
 
     private fun startBeaconResponder() {
@@ -67,26 +117,62 @@ class DualBeatCastClient(
             try {
                 datagramSocket = DatagramSocket(DualBeatCastProtocol.DISCOVERY_PORT).apply {
                     broadcast = true
+                    soTimeout = 1500
                 }
+
+                val pongPacketData = DualBeatCastProtocol.buildDiscoveryPongPacket(clientName, clientId, DualBeatCastProtocol.TYPE_DISCOVERY_PONG)
+                val beaconPacketData = DualBeatCastProtocol.buildDiscoveryPongPacket(clientName, clientId, DualBeatCastProtocol.TYPE_DISCOVERY_BEACON)
+
                 val rxBuffer = ByteArray(512)
                 val rxPacket = DatagramPacket(rxBuffer, rxBuffer.size)
 
-                while (isActive) {
-                    datagramSocket.receive(rxPacket)
-                    if (rxPacket.length >= 8) {
-                        val buf = ByteBuffer.wrap(rxPacket.data, 0, rxPacket.length).order(ByteOrder.BIG_ENDIAN)
-                        val magic = buf.getInt()
-                        val type = buf.getInt()
+                while (isActive && _isListening.value) {
+                    updateLocalIp()
 
-                        if (magic == DualBeatCastProtocol.MAGIC_HEADER && type == DualBeatCastProtocol.TYPE_DISCOVERY_PING) {
-                            val replyData = DualBeatCastProtocol.buildDiscoveryPongPacket(clientName, clientId)
-                            val replyPacket = DatagramPacket(replyData, replyData.size, rxPacket.address, rxPacket.port)
-                            datagramSocket.send(replyPacket)
+                    // 1. Actively broadcast beacon so transmitters notice us immediately
+                    val broadcasts = NetworkUtils.getBroadcastAddresses()
+                    for (bcast in broadcasts) {
+                        try {
+                            val beaconPacket = DatagramPacket(beaconPacketData, beaconPacketData.size, bcast, DualBeatCastProtocol.DISCOVERY_PORT)
+                            datagramSocket.send(beaconPacket)
+                        } catch (e: Exception) {
+                            // Ignored per interface
+                        }
+                    }
+
+                    // Also ping hotspot gateway directly if connected as a client
+                    NetworkUtils.getHotspotGatewayAddress()?.let { gw ->
+                        try {
+                            val gwPacket = DatagramPacket(beaconPacketData, beaconPacketData.size, gw, DualBeatCastProtocol.DISCOVERY_PORT)
+                            datagramSocket.send(gwPacket)
+                        } catch (e: Exception) {
+                            // Ignored
+                        }
+                    }
+
+                    // 2. Listen for incoming pings from transmitters
+                    val waitEnd = System.currentTimeMillis() + 1500
+                    while (System.currentTimeMillis() < waitEnd && isActive) {
+                        try {
+                            datagramSocket.receive(rxPacket)
+                            if (rxPacket.length >= 8) {
+                                val buf = ByteBuffer.wrap(rxPacket.data, 0, rxPacket.length).order(ByteOrder.BIG_ENDIAN)
+                                val magic = buf.getInt()
+                                val type = buf.getInt()
+
+                                if (magic == DualBeatCastProtocol.MAGIC_HEADER && type == DualBeatCastProtocol.TYPE_DISCOVERY_PING) {
+                                    val replyPacket = DatagramPacket(pongPacketData, pongPacketData.size, rxPacket.address, rxPacket.port)
+                                    datagramSocket.send(replyPacket)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Timeout expected
+                            break
                         }
                     }
                 }
             } catch (e: Exception) {
-                // Log and continue on interrupt
+                e.printStackTrace()
             } finally {
                 datagramSocket?.close()
             }
@@ -96,18 +182,20 @@ class DualBeatCastClient(
     private fun startStreamServer() {
         streamJob = scope.launch {
             try {
-                serverSocket = ServerSocket(DualBeatCastProtocol.STREAM_PORT)
+                serverSocket = ServerSocket(DualBeatCastProtocol.STREAM_PORT).apply {
+                    reuseAddress = true
+                }
                 initAudioTrack()
                 startJitterBufferPlayback()
 
-                while (isActive) {
+                while (isActive && _isListening.value) {
                     val socket = serverSocket?.accept() ?: break
                     _isConnected.value = true
                     handleStreamingConnection(socket)
                     _isConnected.value = false
                 }
             } catch (e: Exception) {
-                // Server closed or network error
+                // Server socket closed
             } finally {
                 releaseAudioTrack()
             }
@@ -150,7 +238,6 @@ class DualBeatCastClient(
                 _bufferFillPercent.value = (packetCount.toFloat() / TARGET_BUFFER_PACKETS * 100).toInt().coerceIn(0, 100)
 
                 if (!isPrebuffered) {
-                    // Wait until initial jitter buffer depth is reached
                     if (packetCount >= TARGET_BUFFER_PACKETS) {
                         isPrebuffered = true
                     } else {
@@ -163,7 +250,6 @@ class DualBeatCastClient(
                 if (frame != null) {
                     audioTrack?.write(frame.data, 0, frame.data.size)
                 } else {
-                    // Buffer underrun: trigger re-buffering
                     isPrebuffered = false
                     delay(10)
                 }
@@ -185,7 +271,6 @@ class DualBeatCastClient(
                 val pts = buf.getLong()
                 val payloadSize = buf.getInt()
 
-                // Robust packet validation
                 if (magic != DualBeatCastProtocol.MAGIC_HEADER) {
                     break
                 }
@@ -193,9 +278,7 @@ class DualBeatCastClient(
                     break
                 }
 
-                // Sequence validation (detect lost or out of order packets)
                 if (lastSequenceNumber != -1L && seq <= lastSequenceNumber) {
-                    // Stale or duplicate packet, skip payload
                     skipBytes(input, payloadSize)
                     continue
                 }
@@ -206,8 +289,7 @@ class DualBeatCastClient(
 
                 if (type == DualBeatCastProtocol.TYPE_AUDIO_DATA) {
                     jitterBuffer.offer(JitterBufferPacket(seq, pts, payload))
-                    // Cap buffer to prevent runaway memory usage
-                    if (jitterBuffer.size > TARGET_BUFFER_PACKETS * 4) {
+                    if (jitterBuffer.size > TARGET_BUFFER_PACKETS * 6) {
                         jitterBuffer.poll()
                     }
                 }
@@ -255,5 +337,6 @@ class DualBeatCastClient(
         playbackJob?.cancel()
         runCatching { serverSocket?.close() }
         releaseAudioTrack()
+        releaseNetworkLocks()
     }
 }
