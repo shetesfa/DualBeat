@@ -6,6 +6,7 @@ import androidx.media3.common.*
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import com.google.common.util.concurrent.ListenableFuture
+import com.tesfa.dualbeat.DualBeatApp
 import com.tesfa.dualbeat.domain.model.AudioTrack
 import com.tesfa.dualbeat.playback.service.DualBeatMediaSessionService
 import kotlinx.coroutines.*
@@ -207,7 +208,19 @@ class MusicPlaybackController(
 
         controller.setMediaItems(mediaItems, validIndex, startPositionMs)
         controller.prepare()
+        pauseVideoIfPlaying()
         controller.play()
+    }
+
+    private fun pauseVideoIfPlaying() {
+        try {
+            val app = DualBeatApp.instance
+            if (app.videoController.getPlayer()?.isPlaying == true) {
+                app.videoController.getPlayer()?.pause()
+            }
+        } catch (e: Exception) {
+            // Ignore if video controller not yet initialized
+        }
     }
 
     fun playSingle(track: AudioTrack) {
@@ -215,6 +228,7 @@ class MusicPlaybackController(
     }
 
     fun resume() {
+        pauseVideoIfPlaying()
         mediaController?.play()
     }
 
@@ -227,6 +241,7 @@ class MusicPlaybackController(
         if (controller.isPlaying) {
             controller.pause()
         } else {
+            pauseVideoIfPlaying()
             controller.play()
         }
     }

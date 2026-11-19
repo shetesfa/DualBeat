@@ -71,6 +71,7 @@ class VideoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playVideo(videoId: Long) {
         val video = _uiState.value.videos.firstOrNull { it.id == videoId } ?: return
+        app.musicController.pause()
         viewModelScope.launch {
             val lastPos = mediaRepo.getLastPosition(video.id, MediaType.VIDEO)
             videoController.playVideo(video, lastPos)

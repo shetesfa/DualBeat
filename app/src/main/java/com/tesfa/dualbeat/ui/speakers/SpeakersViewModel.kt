@@ -26,13 +26,11 @@ data class SpeakersUiState(
     val isReceiverModeActive: Boolean = false,
     val isCastBroadcasting: Boolean = false,
     val isScanning: Boolean = false,
+    val isTransmitterRunning: Boolean = false,
     val localIpAddress: String = "Searching...",
     val manualIpInput: String = "",
     val connectionStatusMessage: String? = null
-) {
-    val isTransmitterRunning: Boolean
-        get() = isCastBroadcasting
-}
+)
 
 class SpeakersViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -55,16 +53,19 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
             combine(
                 btManager.bondedDevices,
                 castServer.discoveredNodes,
-                castServer.isBroadcasting,
+                combine(castServer.isBroadcasting, castServer.isDiscovering) { b, d -> Pair(b, d) },
                 castClient.isListening,
                 castClient.localIpAddress
-            ) { bonded, receiversMap, isBroadcasting, isReceiving, receiverIp ->
+            ) { bonded, receiversMap, castStatus, isReceiving, receiverIp ->
+                val (isBroadcasting, isDiscovering) = castStatus
                 _uiState.update { current ->
                     current.copy(
                         bondedDevices = bonded,
                         discoveredReceivers = receiversMap.values.toList(),
                         isCastBroadcasting = isBroadcasting,
                         isReceiverModeActive = isReceiving,
+                        isTransmitterRunning = isDiscovering || isBroadcasting,
+                        isScanning = isDiscovering,
                         localIpAddress = if (isReceiving) receiverIp else castServer.localIpAddress.value,
                         routeReport = multiBtEngine.analyzeRoutingCapabilities()
                     )
@@ -100,13 +101,16 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleTransmitter() {
-        if (_uiState.value.isCastBroadcasting) {
+        if (_uiState.value.isTransmitterRunning) {
             castServer.release()
             stopCastDiscovery()
-            _uiState.update { it.copy(connectionStatusMessage = "Transmitter stopped.") }
+            _uiState.update { it.copy(isTransmitterRunning = false, connectionStatusMessage = "Transmitter stopped.") }
         } else {
+            if (_uiState.value.isReceiverModeActive) {
+                toggleReceiverMode(false)
+            }
             startCastDiscovery()
-            _uiState.update { it.copy(connectionStatusMessage = "Transmitter active. Sound from DualBeat will stream to connected receivers.") }
+            _uiState.update { it.copy(isTransmitterRunning = true, connectionStatusMessage = "Transmitter active. Sound from DualBeat will stream to connected receivers.") }
         }
     }
 
@@ -152,16 +156,27 @@ class SpeakersViewModel(application: Application) : AndroidViewModel(application
 
     fun toggleReceiverMode(enable: Boolean) {
         if (enable) {
+            if (_uiState.value.isTransmitterRunning) {
+                castServer.release()
+                stopCastDiscovery()
+            }
             castClient.startReceiverMode()
             _uiState.update {
                 it.copy(
+                    isTransmitterRunning = false,
+                    isReceiverModeActive = true,
                     localIpAddress = castClient.localIpAddress.value,
                     connectionStatusMessage = "Receiver Mode Active! IP: ${castClient.localIpAddress.value} on port 8991"
                 )
             }
         } else {
             castClient.stopReceiverMode()
-            _uiState.update { it.copy(connectionStatusMessage = "Receiver Mode Stopped.") }
+            _uiState.update {
+                it.copy(
+                    isReceiverModeActive = false,
+                    connectionStatusMessage = "Receiver Mode Stopped."
+                )
+            }
         }
     }
 }

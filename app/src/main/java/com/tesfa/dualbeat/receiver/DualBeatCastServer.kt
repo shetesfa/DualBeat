@@ -29,6 +29,9 @@ class DualBeatCastServer(
     private val _isBroadcasting = MutableStateFlow(false)
     val isBroadcasting: StateFlow<Boolean> = _isBroadcasting.asStateFlow()
 
+    private val _isDiscovering = MutableStateFlow(false)
+    val isDiscovering: StateFlow<Boolean> = _isDiscovering.asStateFlow()
+
     private val _localIpAddress = MutableStateFlow("Searching...")
     val localIpAddress: StateFlow<String> = _localIpAddress.asStateFlow()
 
@@ -78,6 +81,7 @@ class DualBeatCastServer(
 
     fun startDiscovery() {
         if (discoveryJob?.isActive == true) return
+        _isDiscovering.value = true
         acquireNetworkLocks()
         updateLocalIp()
 
@@ -164,6 +168,7 @@ class DualBeatCastServer(
     }
 
     fun stopDiscovery() {
+        _isDiscovering.value = false
         discoveryJob?.cancel()
         discoveryJob = null
         releaseNetworkLocks()

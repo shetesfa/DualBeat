@@ -73,6 +73,26 @@ class MainActivity : ComponentActivity() {
         _isInPipMode.value = isInPictureInPictureMode
     }
 
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        val app = application as DualBeatApp
+        if (app.videoController.getPlayer()?.isPlaying == true && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val video = app.videoController.videoState.value.currentVideo
+            val width = video?.resolutionWidth?.takeIf { it > 0 } ?: 16
+            val height = video?.resolutionHeight?.takeIf { it > 0 } ?: 9
+            val rational = try {
+                val ratio = width.toFloat() / height.toFloat()
+                if (ratio in 0.42f..2.38f) android.util.Rational(width, height) else android.util.Rational(16, 9)
+            } catch (e: Exception) {
+                android.util.Rational(16, 9)
+            }
+            val pipParams = android.app.PictureInPictureParams.Builder()
+                .setAspectRatio(rational)
+                .build()
+            enterPictureInPictureMode(pipParams)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

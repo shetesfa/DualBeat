@@ -68,15 +68,22 @@ fun VideoPlayerScreen(
         onDispose {
             viewModel.saveCurrentPosition()
             activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            val isInPip = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                activity?.isInPictureInPictureMode == true
+            } else false
+            if (!isInPip) {
+                viewModel.videoController.getPlayer()?.pause()
+            }
         }
     }
 
     BackHandler(enabled = !isInPipMode) {
         viewModel.saveCurrentPosition()
+        viewModel.videoController.getPlayer()?.pause()
         onBack()
     }
 
-    fun triggerPipMode() {
+    fun buildPipParams(): PictureInPictureParams? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val width = videoState.currentVideo?.resolutionWidth?.takeIf { it > 0 } ?: 16
             val height = videoState.currentVideo?.resolutionHeight?.takeIf { it > 0 } ?: 9
@@ -86,10 +93,29 @@ fun VideoPlayerScreen(
             } catch (e: Exception) {
                 Rational(16, 9)
             }
-            val pipParams = PictureInPictureParams.Builder()
+            val builder = PictureInPictureParams.Builder()
                 .setAspectRatio(rational)
-                .build()
-            activity?.enterPictureInPictureMode(pipParams)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                builder.setAutoEnterEnabled(videoState.isPlaying)
+            }
+            return builder.build()
+        }
+        return null
+    }
+
+    LaunchedEffect(videoState.isPlaying, videoState.currentVideo) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            buildPipParams()?.let { params ->
+                activity?.setPictureInPictureParams(params)
+            }
+        }
+    }
+
+    fun triggerPipMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            buildPipParams()?.let { params ->
+                activity?.enterPictureInPictureMode(params)
+            }
         }
     }
 
@@ -191,11 +217,13 @@ fun VideoPlayerScreen(
         // Video View
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                val view = android.view.LayoutInflater.from(ctx).inflate(com.tesfa.dualbeat.R.layout.view_video_player, null) as PlayerView
+                view.apply {
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
+                    keepScreenOn = true
                     useController = false
                     player = viewModel.videoController.getPlayer()
                     resizeMode = when (videoState.aspectRatio) {
@@ -209,6 +237,7 @@ fun VideoPlayerScreen(
             },
             update = { playerView ->
                 playerView.player = viewModel.videoController.getPlayer()
+                playerView.keepScreenOn = videoState.isPlaying
                 playerView.resizeMode = when (videoState.aspectRatio) {
                     VideoAspectRatio.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
                     VideoAspectRatio.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
